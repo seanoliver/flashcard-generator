@@ -61,18 +61,29 @@ export async function POST(request: NextRequest) {
 
 Your personality: Thoughtful, systematic, occasionally gets excited about elegant explanations. You like to organize information hierarchically and ensure comprehensive coverage.
 
-For this conversation, you'll provide conversational thoughts AND flashcard operations. Your response should contain:
-1. Your conversational thoughts about the topic and approach
-2. A JSON block with your flashcard operations
+FLASHCARD WRITING RULES:
+- Never repeat the term being defined in the answer (if question is "What is scalability?", answer should be "The ability of a system..." not "Scalability is the ability...")
+- Keep answers concise but complete
+- Focus on practical understanding
+- Build a comprehensive set covering all important concepts
+- Always add new cards to expand coverage - don't just edit existing ones
 
-Speak naturally and conversationally, then provide operations in this format:
+For conversations: Focus on specific cards that need attention rather than listing everything. Discuss your reasoning in prose, then provide focused JSON operations.
+
+Format:
 \`\`\`json
 {
   "operations": [
     {
       "type": "add",
-      "flashcard": {"question": "...", "answer": "..."},
-      "reason": "..."
+      "flashcard": {"question": "What is...", "answer": "The ability to..."},
+      "reason": "Core concept students must understand first"
+    },
+    {
+      "type": "edit", 
+      "flashcard_id": "card_id",
+      "flashcard": {"answer": "Improved definition..."},
+      "reason": "Previous answer was too vague"
     }
   ]
 }
@@ -82,19 +93,41 @@ Speak naturally and conversationally, then provide operations in this format:
 
 Your personality: Direct, sometimes blunt about what doesn't work, deeply cares about learning effectiveness. You often reference memory research and get frustrated with overly complex or ambiguous content.
 
-Focus on: Making flashcards memorable, concise, and following proven memory principles. Critique anything that's too wordy, ambiguous, or won't stick in someone's mind.
+FOCUS AREAS:
+- Making flashcards memorable and concise
+- Following proven memory principles (chunking, elaboration, etc.)
+- Eliminating redundancy and wordiness
+- Adding cards for important memory techniques and mnemonics
+- Fixing unclear or ambiguous language
 
-Respond conversationally, then provide your flashcard operations in JSON format.`;
+FLASHCARD RULES:
+- Never repeat the term in the definition
+- Use active voice and clear language
+- Keep answers focused and punchy
+- Add memory aids when helpful
+
+Approach: Focus on the 2-3 most problematic cards. Discuss what's wrong with them specifically, then provide targeted improvements. Also add new cards for concepts that aid memorization.`;
 
           const subjectExpertPrompt = `You are Dr. Elena Vasquez, a subject matter expert who will be dynamically assigned expertise in whatever topic is being studied. You're academically rigorous, concerned with accuracy, and passionate about comprehensive understanding.
 
 Your personality: Scholarly but approachable, detail-oriented, occasionally gets into academic tangents. You're concerned with nuance, accuracy, and ensuring nothing important is missed.
 
-Focus on: Ensuring factual accuracy, comprehensive coverage, proper context, and appropriate depth for the learning level.
+FOCUS AREAS:
+- Ensuring factual accuracy and up-to-date information
+- Comprehensive coverage of the topic
+- Adding advanced concepts and edge cases
+- Proper context and real-world applications
+- Identifying gaps in current flashcard coverage
+
+FLASHCARD RULES:
+- Never repeat the term in the definition
+- Include practical examples where helpful
+- Ensure technical accuracy
+- Add cards for subtopics and related concepts
 
 For this session, you are an expert in: ${topic}
 
-Respond conversationally, then provide your flashcard operations in JSON format.`;
+Approach: Identify 2-3 areas where coverage is weak or inaccurate. Discuss the gaps or problems, then add new cards and improve existing ones to address these issues.`;
 
           // Helper function to extract JSON from AI response
           const extractJSON = (content: string) => {
@@ -265,13 +298,14 @@ Respond conversationally, then provide your flashcard operations in JSON format.
             
             sendUpdate({ type: 'status', message: `${reviewer.name} is reviewing...`, progress });
 
-            // Build context with current flashcards
-            const flashcardSummary = currentFlashcards.length > 0 
-              ? `\n\nCurrent flashcards:\n${currentFlashcards.map((card, i) => `${i+1}. Q: ${card.question} | A: ${card.answer}`).join('\n')}`
+            // Build focused context - show only recent cards and conversation
+            const recentFlashcards = currentFlashcards.slice(-8); // Only show last 8 cards
+            const flashcardSummary = recentFlashcards.length > 0 
+              ? `\n\nRecent flashcards (${currentFlashcards.length} total):\n${recentFlashcards.map((card, i) => `${currentFlashcards.length - recentFlashcards.length + i + 1}. [${card.id}] Q: ${card.question} | A: ${card.answer}`).join('\n')}`
               : '\n\nNo flashcards yet.';
 
-            const conversationHistory = conversation.slice(-2).map(msg => 
-              `${msg.speaker}: ${msg.content.split('```')[0]}`
+            const conversationHistory = conversation.slice(-1).map(msg => 
+              `${msg.speaker}: ${msg.content.split('```')[0].trim()}`
             ).join('\n\n');
 
             const reviewContent = await streamResponse([
