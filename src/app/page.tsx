@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import FlashcardGenerator from '@/components/FlashcardGenerator';
 
 export default function Home() {

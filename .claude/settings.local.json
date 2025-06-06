@@ -9,8 +9,13 @@
       "Bash(pnpm add:*)",
       "Bash(pnpm remove:*)",
       "Bash(mv:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(grep:*)",
+      "Bash(pnpm run:*)"
     ],
     "deny": []
+  },
+  "git": {
+    "commitMessageFooter": false
   }
 }

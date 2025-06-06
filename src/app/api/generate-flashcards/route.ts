@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        const sendUpdate = (data: any) => {
+        const sendUpdate = (data: Record<string, unknown>) => {
           const message = `data: ${JSON.stringify(data)}\n\n`;
           controller.enqueue(encoder.encode(message));
         };
@@ -77,13 +77,13 @@ FLASHCARD WRITING RULES:
 Example conversation style: "I'm really excited about how this is shaping up! I noticed we're missing some foundational concepts that students always struggle with. Let me add a few cards about..."
 
 CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations. Even if you're just chatting, you still need to add cards. Format:
-```json
+\`\`\`json
 {
   "operations": [
     {"type": "add", "flashcard": {"question": "...", "answer": "..."}, "reason": "..."}
   ]
 }
-```;
+\`\`\``;
 
           const memoryExpertPrompt = `You are Dr. Marcus Rodriguez, a cognitive psychologist who specializes in memory techniques and effective learning strategies. You're passionate about making information stick and can be a bit of a perfectionist when it comes to clarity and memorability.
 
@@ -111,13 +111,13 @@ FLASHCARD RULES:
 Example: "Okay, I'm seeing some good progress, but honestly? Some of these answers are still too abstract. Students need concrete hooks. Let me add some cards about specific memory techniques..."
 
 CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations:
-```json
+\`\`\`json
 {
   "operations": [
     {"type": "add", "flashcard": {"question": "...", "answer": "..."}, "reason": "..."}
   ]
 }
-```;
+\`\`\``;
 
           const subjectExpertPrompt = `You are Dr. Elena Vasquez, a subject matter expert who will be dynamically assigned expertise in whatever topic is being studied. You're academically rigorous, concerned with accuracy, and passionate about comprehensive understanding.
 
@@ -148,13 +148,13 @@ For this session, you are an expert in: ${topic}
 Example: "Oh, this is fascinating! I love where this is going, but we're missing some crucial real-world applications that students always ask about. Let me add some cards about how this actually plays out in practice..."
 
 CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations:
-```json
+\`\`\`json
 {
   "operations": [
     {"type": "add", "flashcard": {"question": "...", "answer": "..."}, "reason": "..."}
   ]
 }
-```;
+\`\`\``;
 
           // Helper function to extract JSON from AI response
           const extractJSON = (content: string) => {
@@ -269,15 +269,15 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
           };
 
           // AI Conversation Threads
-          let generatorMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+          const generatorMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
             { role: 'system', content: generatorPrompt }
           ];
 
-          let memoryExpertMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+          const memoryExpertMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
             { role: 'system', content: memoryExpertPrompt }
           ];
 
-          let subjectExpertMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+          const subjectExpertMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
             { role: 'system', content: subjectExpertPrompt }
           ];
 
@@ -320,13 +320,13 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
               role: 'memory_expert' as const, 
               name: 'Dr. Marcus Rodriguez', 
               messages: memoryExpertMessages,
-              intro: (cards: Flashcard[]) => `Hey Marcus! What do you think about where we're at so far? Any memory concerns jumping out at you?`
+              intro: () => `Hey Marcus! What do you think about where we're at so far? Any memory concerns jumping out at you?`
             },
             { 
               role: 'subject_expert' as const, 
               name: 'Dr. Elena Vasquez', 
               messages: subjectExpertMessages,
-              intro: (cards: Flashcard[]) => `Elena, what's your take on our coverage so far? What exciting aspects of ${topic} should we definitely include?`
+              intro: () => `Elena, what's your take on our coverage so far? What exciting aspects of ${topic} should we definitely include?`
             }
           ];
 
@@ -350,7 +350,7 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
               ...reviewer.messages,
               { 
                 role: 'user', 
-                content: `${reviewer.intro(currentFlashcards)}${flashcardSummary}\n\nRecent discussion:\n${conversationHistory}\n\nJump into the conversation naturally! Share what you're thinking and DEFINITELY add several new cards (2-4 minimum) to expand our coverage. Remember - we want genuine conversation, not formal analysis. IMPORTANT: End your response with JSON operations!`
+                content: `${reviewer.intro()}${flashcardSummary}\n\nRecent discussion:\n${conversationHistory}\n\nJump into the conversation naturally! Share what you're thinking and DEFINITELY add several new cards (2-4 minimum) to expand our coverage. Remember - we want genuine conversation, not formal analysis. IMPORTANT: End your response with JSON operations!`
               }
             ], `${reviewer.role}-${round}`, reviewer.role, reviewer.name, progress);
 
