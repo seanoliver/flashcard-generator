@@ -134,16 +134,22 @@ Example: "Oh, this is fascinating! I love where this is going, but we're missing
           // Helper function to extract JSON from AI response
           const extractJSON = (content: string) => {
             try {
+              console.log('Attempting to extract JSON from content:', content.substring(0, 500) + '...');
               const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
                                content.match(/\{[\s\S]*\}/);
               
               if (jsonMatch) {
                 const jsonStr = jsonMatch[1] || jsonMatch[0];
-                return JSON.parse(jsonStr);
+                console.log('Found JSON string:', jsonStr);
+                const parsed = JSON.parse(jsonStr);
+                console.log('Successfully parsed JSON:', parsed);
+                return parsed;
               }
+              console.log('No JSON found in content');
               return null;
             } catch (error) {
               console.warn('Failed to parse JSON from response:', error);
+              console.log('Content that failed to parse:', content);
               return null;
             }
           };
@@ -266,9 +272,12 @@ Example: "Oh, this is fascinating! I love where this is going, but we're missing
 
           // Extract and apply initial flashcards
           const initialJSON = extractJSON(initialContent);
+          console.log('Initial JSON extraction result:', initialJSON);
           if (initialJSON?.operations) {
+            console.log('Applying initial operations:', initialJSON.operations);
             const result = applyFlashcardOperations(currentFlashcards, initialJSON.operations);
             currentFlashcards = result.flashcards;
+            console.log('Updated flashcards after initial generation:', currentFlashcards.length);
             
             sendUpdate({
               type: 'flashcards_updated',
@@ -276,6 +285,8 @@ Example: "Oh, this is fascinating! I love where this is going, but we're missing
               operations: result.appliedOperations,
               progress: 15
             });
+          } else {
+            console.log('No operations found in initial response - this is the problem!');
           }
 
           // Step 2: Conversational review rounds
@@ -322,9 +333,12 @@ Example: "Oh, this is fascinating! I love where this is going, but we're missing
 
             // Extract and apply operations
             const reviewJSON = extractJSON(reviewContent);
+            console.log(`Review JSON from ${reviewer.name}:`, reviewJSON);
             if (reviewJSON?.operations && reviewJSON.operations.length > 0) {
+              console.log(`Applying ${reviewJSON.operations.length} operations from ${reviewer.name}`);
               const result = applyFlashcardOperations(currentFlashcards, reviewJSON.operations);
               currentFlashcards = result.flashcards;
+              console.log(`Total flashcards after ${reviewer.name}: ${currentFlashcards.length}`);
               
               sendUpdate({
                 type: 'flashcards_updated',
@@ -332,6 +346,8 @@ Example: "Oh, this is fascinating! I love where this is going, but we're missing
                 operations: result.appliedOperations,
                 progress: progress + 5
               });
+            } else {
+              console.log(`No operations found from ${reviewer.name}`);
             }
 
             // Add to other experts' context
