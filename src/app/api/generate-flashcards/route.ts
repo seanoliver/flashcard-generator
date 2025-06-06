@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         const sendUpdate = (data: any) => {
-          const message = `data: ${JSON.stringify(data)}\\n\\n`;
+          const message = `data: ${JSON.stringify(data)}\n\n`;
           controller.enqueue(encoder.encode(message));
         };
 
@@ -99,8 +99,8 @@ Respond conversationally, then provide your flashcard operations in JSON format.
           // Helper function to extract JSON from AI response
           const extractJSON = (content: string) => {
             try {
-              const jsonMatch = content.match(/\`\`\`json\\s*([\\s\\S]*?)\\s*\`\`\`/) || 
-                               content.match(/\\{[\\s\\S]*\\}/);
+              const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
+                               content.match(/\{[\s\S]*\}/);
               
               if (jsonMatch) {
                 const jsonStr = jsonMatch[1] || jsonMatch[0];
@@ -141,56 +141,65 @@ Respond conversationally, then provide your flashcard operations in JSON format.
 
           // Helper function for streaming API calls
           const streamResponse = async (messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[], messageId: string, role: FlashcardMessage['role'], speaker: string, progress: number) => {
-            const message: FlashcardMessage = {
-              role,
-              content: '',
-              timestamp: Date.now(),
-              speaker
-            };
-            
-            conversation.push(message);
-            
-            sendUpdate({ 
-              type: 'message_start', 
-              messageId,
-              message: { ...message },
-              progress,
-              conversationLength: conversation.length 
-            });
-
-            const stream = await openai.chat.completions.create({
-              model: 'gpt-4o-mini',
-              messages,
-              temperature: 0.8,
-              max_tokens: MAX_TOKENS,
-              stream: true,
-            });
-
-            let content = '';
-            for await (const chunk of stream) {
-              const delta = chunk.choices[0]?.delta?.content || '';
-              content += delta;
+            try {
+              console.log(`Starting stream for ${speaker}...`);
               
-              const messageIndex = conversation.length - 1;
-              conversation[messageIndex].content = content;
+              const message: FlashcardMessage = {
+                role,
+                content: '',
+                timestamp: Date.now(),
+                speaker
+              };
+              
+              conversation.push(message);
+              
+              sendUpdate({ 
+                type: 'message_start', 
+                messageId,
+                message: { ...message },
+                progress,
+                conversationLength: conversation.length 
+              });
+
+              const stream = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages,
+                temperature: 0.8,
+                max_tokens: MAX_TOKENS,
+                stream: true,
+              });
+
+              let content = '';
+              for await (const chunk of stream) {
+                const delta = chunk.choices[0]?.delta?.content || '';
+                content += delta;
+                
+                const messageIndex = conversation.length - 1;
+                conversation[messageIndex].content = content;
+                
+                sendUpdate({
+                  type: 'message_token',
+                  messageId,
+                  token: delta,
+                  content,
+                  progress
+                });
+              }
+              
+              console.log(`Completed stream for ${speaker}, content length: ${content.length}`);
               
               sendUpdate({
-                type: 'message_token',
+                type: 'message_complete',
                 messageId,
-                token: delta,
-                content,
+                finalContent: content,
                 progress
               });
-            }
-            
-            sendUpdate({
-              type: 'message_complete',
-              messageId,
-              finalContent: content,
-              progress
-            });
 
-            return content;
+              return content;
+            } catch (error) {
+              console.error(`Error in streamResponse for ${speaker}:`, error);
+              throw error;
+            }
           };
 
           // AI Conversation Threads
@@ -208,6 +217,7 @@ Respond conversationally, then provide your flashcard operations in JSON format.
 
           // Step 1: Initial flashcard generation
           sendUpdate({ type: 'status', message: 'Dr. Sarah Chen is creating initial flashcards...', progress: 5 });
+          console.log('Starting initial generation...');
 
           const initialContent = await streamResponse([
             ...generatorMessages,
@@ -257,23 +267,18 @@ Respond conversationally, then provide your flashcard operations in JSON format.
 
             // Build context with current flashcards
             const flashcardSummary = currentFlashcards.length > 0 
-              ? `\\n\\nCurrent flashcards:\\n${currentFlashcards.map((card, i) => `${i+1}. Q: ${card.question} | A: ${card.answer}`).join('\\n')}`
-              : '\\n\\nNo flashcards yet.';
+              ? `\n\nCurrent flashcards:\n${currentFlashcards.map((card, i) => `${i+1}. Q: ${card.question} | A: ${card.answer}`).join('\n')}`
+              : '\n\nNo flashcards yet.';
 
             const conversationHistory = conversation.slice(-2).map(msg => 
               `${msg.speaker}: ${msg.content.split('```')[0]}`
-            ).join('\\n\\n');
+            ).join('\n\n');
 
             const reviewContent = await streamResponse([
               ...reviewer.messages,
               { 
                 role: 'user', 
-                content: `${reviewer.intro(currentFlashcards)}${flashcardSummary}
-
-Recent discussion:
-${conversationHistory}
-
-Please share your thoughts conversationally, then provide any flashcard changes in JSON format.`
+                content: `${reviewer.intro(currentFlashcards)}${flashcardSummary}\n\nRecent discussion:\n${conversationHistory}\n\nPlease share your thoughts conversationally, then provide any flashcard changes in JSON format.`
               }
             ], `${reviewer.role}-${round}`, reviewer.role, reviewer.name, progress);
 
