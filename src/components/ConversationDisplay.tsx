@@ -35,12 +35,8 @@ export default function ConversationDisplay({ conversation, activeStreams }: Con
     isStreamingRef.current = activeStreams ? activeStreams.size > 0 : false;
   }, [activeStreams]);
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-        AI Expert Conversation
-      </h3>
-      
-      <div ref={scrollRef} className="space-y-4 max-h-96 overflow-y-auto">
+    <div className="h-full flex flex-col">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4">
         {conversation.map((message, index) => {
           const isStreaming = activeStreams && Array.from(activeStreams.values()).some(
             streamMsg => streamMsg.timestamp === message.timestamp && streamMsg.role === message.role
@@ -83,13 +79,15 @@ export default function ConversationDisplay({ conversation, activeStreams }: Con
             </div>
           );
         })}
+        
+        {conversation.length === 0 && (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-500 dark:text-gray-400 text-center">
+              Conversation will appear here as AI experts discuss your flashcards...
+            </p>
+          </div>
+        )}
       </div>
-      
-      {conversation.length === 0 && (
-        <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-          No conversation yet
-        </p>
-      )}
     </div>
   );
 }

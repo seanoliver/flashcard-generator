@@ -176,11 +176,12 @@ export default function FlashcardGenerator() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
-      {!result ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-          <div className="max-w-md mx-auto">
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+    <div className="h-full flex">
+      {/* Input form - only show when not generating and no results */}
+      {!isGenerating && !result && (
+        <div className="w-full flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
               Enter a Topic to Study
             </h2>
             
@@ -191,7 +192,7 @@ export default function FlashcardGenerator() {
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="e.g., GraphQL, Attachment Theory, SQL Joins..."
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                disabled={isGenerating}
+                onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
               />
               
               <div>
@@ -206,7 +207,6 @@ export default function FlashcardGenerator() {
                   value={rounds}
                   onChange={(e) => setRounds(Math.max(2, Math.min(20, parseInt(e.target.value) || 6)))}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  disabled={isGenerating}
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   More rounds = deeper analysis but longer generation time
@@ -219,77 +219,163 @@ export default function FlashcardGenerator() {
               
               <button
                 onClick={handleGenerate}
-                disabled={isGenerating}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
               >
-                {isGenerating ? 'Generating Flashcards...' : 'Generate Flashcards'}
+                Generate Flashcards
               </button>
             </div>
-            
-            {isGenerating && (
-              <div className="mt-6">
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-4">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${streamingData.progress}%` }}
-                  ></div>
+          </div>
+        </div>
+      )}
+
+      {/* Generation in progress or results view */}
+      {(isGenerating || result) && (
+        <>
+          {/* Desktop layout */}
+          <div className="hidden lg:flex h-full">
+            {/* Left sidebar - Flashcards */}
+            <div className="w-80 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Flashcards ({isGenerating ? streamingData.currentFlashcards.length : result?.flashcards.length || 0})
+                  </h3>
+                  <button
+                    onClick={handleReset}
+                    className="text-sm bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded transition-colors duration-200"
+                  >
+                    New Topic
+                  </button>
                 </div>
-                <div className="text-center">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  <p className="mt-2 text-gray-600 dark:text-gray-400 text-sm">
-                    {streamingData.status || 'AI experts are discussing your topic...'}
+                {result && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 truncate">
+                    {result.topic}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">
-                    Progress: {streamingData.progress}%
-                  </p>
+                )}
+              </div>
+              
+              <div className="flex-1 overflow-hidden">
+                <FlashcardList 
+                  flashcards={isGenerating ? streamingData.currentFlashcards : result?.flashcards || []} 
+                  isStreaming={isGenerating}
+                />
+              </div>
+            </div>
+
+            {/* Right side - Chat area */}
+            <div className="flex-1 flex flex-col">
+              {/* Header with progress */}
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    AI Expert Discussion
+                  </h3>
+                  {isGenerating && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${streamingData.progress}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-sm text-gray-600 dark:text-gray-400 min-w-0">
+                        {streamingData.progress}%
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
-                {(streamingData.conversation.length > 0 || streamingData.currentFlashcards.length > 0) && (
-                  <div className="mt-6 grid lg:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">
-                        Current Flashcards ({streamingData.currentFlashcards.length})
-                      </h4>
-                      <FlashcardList 
-                        flashcards={streamingData.currentFlashcards} 
-                        isStreaming={true}
-                      />
-                    </div>
-                    
-                    <div>
-                      <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">
-                        AI Discussion
-                      </h4>
-                      <ConversationDisplay 
-                        conversation={streamingData.conversation} 
-                        activeStreams={streamingData.activeStreams}
-                      />
-                    </div>
+                {isGenerating && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {streamingData.status || 'AI experts are working...'}
+                    </p>
                   </div>
                 )}
               </div>
-            )}
+
+              {/* Chat content */}
+              <div className="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900">
+                <ConversationDisplay 
+                  conversation={isGenerating ? streamingData.conversation : result?.conversation || []} 
+                  activeStreams={isGenerating ? streamingData.activeStreams : undefined}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-              Results for: {result.topic}
-            </h2>
-            <button
-              onClick={handleReset}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
-            >
-              New Topic
-            </button>
+
+          {/* Mobile layout */}
+          <div className="lg:hidden h-full flex flex-col">
+            {/* Mobile header */}
+            <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {isGenerating ? 'Generating...' : result?.topic}
+                </h3>
+                <button
+                  onClick={handleReset}
+                  className="text-sm bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded transition-colors duration-200"
+                >
+                  New Topic
+                </button>
+              </div>
+              
+              {isGenerating && (
+                <div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${streamingData.progress}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {streamingData.status || 'AI experts are working...'}
+                    </p>
+                    <span className="text-sm text-gray-600 dark:text-gray-400 ml-auto">
+                      {streamingData.progress}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile content - stacked vertically */}
+            <div className="flex-1 flex flex-col">
+              {/* Flashcards section */}
+              <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    Flashcards ({isGenerating ? streamingData.currentFlashcards.length : result?.flashcards.length || 0})
+                  </h4>
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  <FlashcardList 
+                    flashcards={isGenerating ? streamingData.currentFlashcards : result?.flashcards || []} 
+                    isStreaming={isGenerating}
+                  />
+                </div>
+              </div>
+
+              {/* Chat section */}
+              <div className="flex-1 bg-gray-50 dark:bg-gray-900 flex flex-col">
+                <div className="p-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                  <h4 className="font-medium text-gray-900 dark:text-white">
+                    AI Discussion
+                  </h4>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <ConversationDisplay 
+                    conversation={isGenerating ? streamingData.conversation : result?.conversation || []} 
+                    activeStreams={isGenerating ? streamingData.activeStreams : undefined}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-          
-          <div className="grid lg:grid-cols-2 gap-6">
-            <ConversationDisplay conversation={result.conversation} />
-            <FlashcardList flashcards={result.flashcards} />
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
