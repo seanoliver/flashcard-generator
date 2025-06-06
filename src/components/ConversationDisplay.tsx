@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 interface FlashcardMessage {
-  role: 'generator' | 'memory_expert' | 'subject_expert';
+  role: 'moderator' | 'cardsmith' | 'explainer' | 'challenger' | 'beginner' | 'engineer' | 'coach' | 'historian' | 'contrarian' | 'refiner';
   content: string;
   timestamp: number;
   speaker: string;
@@ -44,23 +44,58 @@ export default function ConversationDisplay({ conversation, activeStreams }: Con
             streamMsg => streamMsg.timestamp === message.timestamp && streamMsg.role === message.role
           );
 
-          // Color coding for different AI personalities
+          // Color coding for different agent roles
           const getMessageStyling = (role: string) => {
             switch (role) {
-              case 'generator':
+              case 'moderator':
+                return {
+                  bg: 'bg-gray-50 dark:bg-gray-900/20 border-l-4 border-gray-600',
+                  badge: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'
+                };
+              case 'cardsmith':
                 return {
                   bg: 'bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500',
                   badge: 'bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200'
                 };
-              case 'memory_expert':
+              case 'explainer':
                 return {
                   bg: 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500',
                   badge: 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200'
                 };
-              case 'subject_expert':
+              case 'challenger':
                 return {
-                  bg: 'bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500',
-                  badge: 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200'
+                  bg: 'bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500',
+                  badge: 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200'
+                };
+              case 'beginner':
+                return {
+                  bg: 'bg-emerald-50 dark:bg-emerald-900/20 border-l-4 border-emerald-500',
+                  badge: 'bg-emerald-100 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200'
+                };
+              case 'engineer':
+                return {
+                  bg: 'bg-teal-50 dark:bg-teal-900/20 border-l-4 border-teal-500',
+                  badge: 'bg-teal-100 dark:bg-teal-800 text-teal-800 dark:text-teal-200'
+                };
+              case 'coach':
+                return {
+                  bg: 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500',
+                  badge: 'bg-orange-100 dark:bg-orange-800 text-orange-800 dark:text-orange-200'
+                };
+              case 'historian':
+                return {
+                  bg: 'bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500',
+                  badge: 'bg-amber-100 dark:bg-amber-800 text-amber-800 dark:text-amber-200'
+                };
+              case 'contrarian':
+                return {
+                  bg: 'bg-rose-50 dark:bg-rose-900/20 border-l-4 border-rose-500',
+                  badge: 'bg-rose-100 dark:bg-rose-800 text-rose-800 dark:text-rose-200'
+                };
+              case 'refiner':
+                return {
+                  bg: 'bg-indigo-50 dark:bg-indigo-900/20 border-l-4 border-indigo-500',
+                  badge: 'bg-indigo-100 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200'
                 };
               default:
                 return {
@@ -123,7 +158,7 @@ export default function ConversationDisplay({ conversation, activeStreams }: Con
         {conversation.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <p className="text-gray-500 dark:text-gray-400 text-center">
-              Conversation will appear here as AI experts discuss your flashcards...
+              Panel discussion will appear here as experts collaborate on your flashcards...
             </p>
           </div>
         )}

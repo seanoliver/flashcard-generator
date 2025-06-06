@@ -5,7 +5,7 @@ import ConversationDisplay from './ConversationDisplay';
 import FlashcardList from './FlashcardList';
 
 interface FlashcardMessage {
-  role: 'generator' | 'memory_expert' | 'subject_expert';
+  role: 'moderator' | 'cardsmith' | 'explainer' | 'challenger' | 'beginner' | 'engineer' | 'coach' | 'historian' | 'contrarian' | 'refiner';
   content: string;
   timestamp: number;
   speaker: string;
@@ -14,6 +14,9 @@ interface FlashcardMessage {
 interface Flashcard {
   question: string;
   answer: string;
+  tags?: string[];
+  notes?: string;
+  id?: string;
 }
 
 interface GenerationResult {
@@ -24,7 +27,12 @@ interface GenerationResult {
 
 export default function FlashcardGenerator() {
   const [topic, setTopic] = useState('');
-  const [rounds, setRounds] = useState(6);
+  const [config, setConfig] = useState({
+    NUM_ROUNDS: 5,
+    MAX_EXPERT_PASSES: 5,
+    INCLUDE_PERSONAS: ['explainer', 'challenger', 'beginner', 'engineer', 'coach', 'historian', 'contrarian', 'refiner'],
+    INCLUDE_TRANSCRIPT: true
+  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,14 +56,14 @@ export default function FlashcardGenerator() {
     setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map(), currentFlashcards: [] });
 
     try {
-      console.log('Sending request for topic:', topic, 'rounds:', rounds);
+      console.log('Sending request for topic:', topic, 'config:', config);
       
       const response = await fetch('/api/generate-flashcards', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ topic, rounds }),
+        body: JSON.stringify({ topic, config }),
       });
 
       console.log('Response status:', response.status);
@@ -180,6 +188,12 @@ export default function FlashcardGenerator() {
     setTopic('');
     setError(null);
     setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map(), currentFlashcards: [] });
+    setConfig({
+      NUM_ROUNDS: 5,
+      MAX_EXPERT_PASSES: 5,
+      INCLUDE_PERSONAS: ['explainer', 'challenger', 'beginner', 'engineer', 'coach', 'historian', 'contrarian', 'refiner'],
+      INCLUDE_TRANSCRIPT: true
+    });
   };
 
   return (
@@ -204,19 +218,80 @@ export default function FlashcardGenerator() {
               
               <div>
                 <label htmlFor="rounds" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Conversation Rounds (default: 6)
+                  Panel Rounds (default: 5)
                 </label>
                 <input
                   id="rounds"
                   type="number"
                   min="2"
-                  max="20"
-                  value={rounds}
-                  onChange={(e) => setRounds(Math.max(2, Math.min(20, parseInt(e.target.value) || 6)))}
+                  max="15"
+                  value={config.NUM_ROUNDS}
+                  onChange={(e) => setConfig(prev => ({...prev, NUM_ROUNDS: Math.max(2, Math.min(15, parseInt(e.target.value) || 5))}))}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  More rounds = deeper analysis but longer generation time
+                  Each round allows expert panel discussion and collaboration
+                </p>
+              </div>
+              
+              <div>
+                <label htmlFor="max-passes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Max Expert Handoffs (default: 5)
+                </label>
+                <input
+                  id="max-passes"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={config.MAX_EXPERT_PASSES}
+                  onChange={(e) => setConfig(prev => ({...prev, MAX_EXPERT_PASSES: Math.max(1, Math.min(10, parseInt(e.target.value) || 5))}))}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  How many times experts can pass to each other per round
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Expert Panel Members
+                </label>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    { id: 'explainer', name: 'Explainer' },
+                    { id: 'challenger', name: 'Challenger' },
+                    { id: 'beginner', name: 'Beginner' },
+                    { id: 'engineer', name: 'Engineer' },
+                    { id: 'coach', name: 'Coach' },
+                    { id: 'historian', name: 'Historian' },
+                    { id: 'contrarian', name: 'Contrarian' },
+                    { id: 'refiner', name: 'Refiner' }
+                  ].map(expert => (
+                    <label key={expert.id} className="flex items-center gap-2 p-2 rounded border border-gray-200 dark:border-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={config.INCLUDE_PERSONAS.includes(expert.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setConfig(prev => ({
+                              ...prev,
+                              INCLUDE_PERSONAS: [...prev.INCLUDE_PERSONAS, expert.id]
+                            }));
+                          } else {
+                            setConfig(prev => ({
+                              ...prev,
+                              INCLUDE_PERSONAS: prev.INCLUDE_PERSONAS.filter(p => p !== expert.id)
+                            }));
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      <span className="text-gray-700 dark:text-gray-300">{expert.name}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Select which expert perspectives to include in the panel
                 </p>
               </div>
               
@@ -275,7 +350,7 @@ export default function FlashcardGenerator() {
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    AI Expert Discussion
+                    Expert Panel Discussion
                   </h3>
                   {isGenerating && (
                     <div className="flex items-center gap-3">
@@ -296,7 +371,7 @@ export default function FlashcardGenerator() {
                   <div className="mt-2 flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {streamingData.status || 'AI experts are working...'}
+                      {streamingData.status || 'Expert panel is collaborating...'}
                     </p>
                   </div>
                 )}
@@ -339,7 +414,7 @@ export default function FlashcardGenerator() {
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {streamingData.status || 'AI experts are working...'}
+                      {streamingData.status || 'Expert panel is collaborating...'}
                     </p>
                     <span className="text-sm text-gray-600 dark:text-gray-400 ml-auto">
                       {streamingData.progress}%
@@ -370,7 +445,7 @@ export default function FlashcardGenerator() {
               <div className="flex-1 bg-gray-50 dark:bg-gray-900 flex flex-col">
                 <div className="p-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                   <h4 className="font-medium text-gray-900 dark:text-white">
-                    AI Discussion
+                    Expert Panel Discussion
                   </h4>
                 </div>
                 <div className="flex-1 overflow-hidden">

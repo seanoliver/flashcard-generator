@@ -11,7 +11,12 @@
       "Bash(mv:*)",
       "Bash(rm:*)",
       "Bash(grep:*)",
-      "Bash(pnpm run:*)"
+      "Bash(pnpm run:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm build:*)",
+      "Bash(timeout:*)",
+      "Bash(true)",
+      "Bash(rg:*)"
     ],
     "deny": []
   },
