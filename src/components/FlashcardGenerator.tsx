@@ -32,7 +32,8 @@ export default function FlashcardGenerator() {
     status: string;
     progress: number;
     activeStreams: Map<string, FlashcardMessage>;
-  }>({ conversation: [], status: '', progress: 0, activeStreams: new Map() });
+    currentFlashcards: Flashcard[];
+  }>({ conversation: [], status: '', progress: 0, activeStreams: new Map(), currentFlashcards: [] });
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -43,7 +44,7 @@ export default function FlashcardGenerator() {
     setIsGenerating(true);
     setError(null);
     setResult(null);
-    setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map() });
+    setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map(), currentFlashcards: [] });
 
     try {
       console.log('Sending request for topic:', topic, 'rounds:', rounds);
@@ -140,6 +141,13 @@ export default function FlashcardGenerator() {
                     activeStreams: newActiveStreams
                   };
                 });
+              } else if (data.type === 'flashcards_updated') {
+                // Update current flashcards state
+                setStreamingData(prev => ({
+                  ...prev,
+                  currentFlashcards: data.flashcards,
+                  progress: data.progress
+                }));
               } else if (data.type === 'complete') {
                 setResult(data.data);
                 setStreamingData(prev => ({ ...prev, progress: 100 }));
@@ -164,7 +172,7 @@ export default function FlashcardGenerator() {
     setResult(null);
     setTopic('');
     setError(null);
-    setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map() });
+    setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map(), currentFlashcards: [] });
   };
 
   return (
@@ -236,15 +244,27 @@ export default function FlashcardGenerator() {
                   </p>
                 </div>
                 
-                {streamingData.conversation.length > 0 && (
-                  <div className="mt-6">
-                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">
-                      Live Conversation
-                    </h4>
-                    <ConversationDisplay 
-                      conversation={streamingData.conversation} 
-                      activeStreams={streamingData.activeStreams}
-                    />
+                {(streamingData.conversation.length > 0 || streamingData.currentFlashcards.length > 0) && (
+                  <div className="mt-6 grid lg:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">
+                        Current Flashcards ({streamingData.currentFlashcards.length})
+                      </h4>
+                      <FlashcardList 
+                        flashcards={streamingData.currentFlashcards} 
+                        isStreaming={true}
+                      />
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">
+                        AI Discussion
+                      </h4>
+                      <ConversationDisplay 
+                        conversation={streamingData.conversation} 
+                        activeStreams={streamingData.activeStreams}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

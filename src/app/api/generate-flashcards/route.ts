@@ -43,33 +43,100 @@ export async function POST(request: NextRequest) {
 
         try {
           const conversation: FlashcardMessage[] = [];
-          const flashcards: Flashcard[] = [];
+          let currentFlashcards: Flashcard[] = [];
 
-          // System prompts for the two agents
-          const explainerPrompt = `You are an Expert Explainer. Your role is to:
-- Break down complex topics into clear, understandable concepts
-- Identify key learning objectives and fundamental principles
-- Propose flashcard questions that test understanding
-- Focus on clarity and comprehensive coverage of the topic
-- When responding, structure your thoughts and suggest specific flashcard Q&A pairs
+          // System prompts for the two agents focused on flashcard iteration
+          const explainerPrompt = `You are an Expert Explainer creating study flashcards. Your role is to:
 
-Format flashcard suggestions as:
-FLASHCARD: Q: [question] | A: [answer]`;
+1. REVIEW the current flashcard set (if any)
+2. ANALYZE the topic for comprehensive coverage
+3. PROPOSE specific improvements: new cards, better questions, clearer answers
+4. FOCUS on educational effectiveness and clarity
 
-          const criticPrompt = `You are a Critical Reviewer. Your role is to:
-- Challenge explanations for completeness and accuracy
-- Identify edge cases, nuances, and potential misconceptions
-- Suggest improvements to flashcard questions and answers
-- Ensure flashcards test deeper understanding, not just memorization
-- Point out missing subtopics or important details
+Your response should:
+- Comment on the current flashcard set's strengths/gaps
+- Suggest specific improvements with clear reasoning
+- Propose new flashcards for missing concepts
 
-When suggesting flashcard improvements, use the format:
-FLASHCARD: Q: [question] | A: [answer]`;
+Format NEW/UPDATED flashcards as:
+FLASHCARD: Q: [question] | A: [answer]
+
+Format DELETIONS as:
+DELETE: [question to remove]`;
+
+          const criticPrompt = `You are a Critical Reviewer evaluating study flashcards. Your role is to:
+
+1. EXAMINE each flashcard for accuracy and educational value
+2. IDENTIFY problems: unclear questions, incomplete answers, redundancy
+3. SUGGEST refinements to make flashcards more effective
+4. ENSURE comprehensive topic coverage without overwhelming detail
+
+Your response should:
+- Critique specific flashcards with clear reasoning
+- Propose improvements or alternatives
+- Suggest new cards for gaps you identify
+
+Format NEW/UPDATED flashcards as:
+FLASHCARD: Q: [question] | A: [answer]
+
+Format DELETIONS as:
+DELETE: [question to remove]`;
+
+          // Helper function to extract flashcard operations from text
+          const extractFlashcardOperations = (content: string) => {
+            const operations = {
+              newCards: [] as Flashcard[],
+              deletions: [] as string[]
+            };
+
+            // Extract new/updated flashcards
+            const flashcardRegex = /FLASHCARD:\s*Q:\s*(.+?)\s*\|\s*A:\s*(.+?)(?=\n|$)/gi;
+            let match;
+            while ((match = flashcardRegex.exec(content)) !== null) {
+              operations.newCards.push({
+                question: match[1].trim(),
+                answer: match[2].trim(),
+              });
+            }
+
+            // Extract deletions
+            const deleteRegex = /DELETE:\s*(.+?)(?=\n|$)/gi;
+            while ((match = deleteRegex.exec(content)) !== null) {
+              operations.deletions.push(match[1].trim());
+            }
+
+            return operations;
+          };
+
+          // Helper function to apply operations to flashcard set
+          const applyOperations = (flashcards: Flashcard[], operations: { newCards: Flashcard[], deletions: string[] }) => {
+            let updated = [...flashcards];
+
+            // Remove deleted cards
+            operations.deletions.forEach(questionToDelete => {
+              updated = updated.filter(card => 
+                !card.question.toLowerCase().includes(questionToDelete.toLowerCase()) &&
+                !questionToDelete.toLowerCase().includes(card.question.toLowerCase())
+              );
+            });
+
+            // Add new cards (avoiding duplicates)
+            operations.newCards.forEach(newCard => {
+              const isDuplicate = updated.some(existingCard => 
+                existingCard.question.toLowerCase() === newCard.question.toLowerCase()
+              );
+              if (!isDuplicate) {
+                updated.push(newCard);
+              }
+            });
+
+            return updated;
+          };
 
           // Start the conversation
           let explainerMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
             { role: 'system', content: explainerPrompt },
-            { role: 'user', content: `Please explain the topic "${topic}" and suggest initial flashcards for learning this subject.` }
+            { role: 'user', content: `Create initial flashcards for the topic "${topic}". Start with the most fundamental concepts and build a solid foundation for learning this subject.` }
           ];
 
           let criticMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -133,6 +200,18 @@ FLASHCARD: Q: [question] | A: [answer]`;
                 });
               }
               
+              // Extract and apply flashcard operations
+              const operations = extractFlashcardOperations(content);
+              currentFlashcards = applyOperations(currentFlashcards, operations);
+              
+              // Send updated flashcard state
+              sendUpdate({
+                type: 'flashcards_updated',
+                flashcards: currentFlashcards,
+                operations,
+                progress
+              });
+              
               // Send completion
               sendUpdate({
                 type: 'message_complete',
@@ -142,7 +221,16 @@ FLASHCARD: Q: [question] | A: [answer]`;
               });
 
               explainerMessages.push({ role: 'assistant', content });
-              criticMessages.push({ role: 'user', content: `The Explainer said: "${content}"\n\nPlease review this explanation and suggest improvements or additional flashcards. Point out any missing nuances or edge cases.` });
+              
+              // Prepare critic's context with current flashcard state
+              const flashcardSummary = currentFlashcards.length > 0 
+                ? `\n\nCURRENT FLASHCARDS:\n${currentFlashcards.map((card, i) => `${i+1}. Q: ${card.question} | A: ${card.answer}`).join('\n')}`
+                : '\n\nCURRENT FLASHCARDS: (none yet)';
+              
+              criticMessages.push({ 
+                role: 'user', 
+                content: `The Explainer provided this feedback on the flashcards: "${content}"${flashcardSummary}\n\nPlease review the current flashcard set and provide your critique. Focus on accuracy, clarity, and completeness. Suggest specific improvements or new cards.` 
+              });
 
             } else {
               // Critic's turn
@@ -194,6 +282,18 @@ FLASHCARD: Q: [question] | A: [answer]`;
                 });
               }
               
+              // Extract and apply flashcard operations
+              const operations = extractFlashcardOperations(content);
+              currentFlashcards = applyOperations(currentFlashcards, operations);
+              
+              // Send updated flashcard state
+              sendUpdate({
+                type: 'flashcards_updated',
+                flashcards: currentFlashcards,
+                operations,
+                progress
+              });
+              
               // Send completion
               sendUpdate({
                 type: 'message_complete',
@@ -203,39 +303,28 @@ FLASHCARD: Q: [question] | A: [answer]`;
               });
 
               criticMessages.push({ role: 'assistant', content });
-              explainerMessages.push({ role: 'user', content: `The Critic said: "${content}"\n\nPlease address their feedback and refine your explanations and flashcard suggestions accordingly.` });
-            }
-          }
-
-          sendUpdate({ type: 'status', message: 'Extracting flashcards...', progress: 85 });
-
-          // Extract flashcards from the conversation
-          const flashcardRegex = /FLASHCARD:\s*Q:\s*(.+?)\s*\|\s*A:\s*(.+?)(?=\n|$)/gi;
-          
-          for (const message of conversation) {
-            let match;
-            while ((match = flashcardRegex.exec(message.content)) !== null) {
-              flashcards.push({
-                question: match[1].trim(),
-                answer: match[2].trim(),
+              
+              // Prepare explainer's context with current flashcard state
+              const flashcardSummary = currentFlashcards.length > 0 
+                ? `\n\nCURRENT FLASHCARDS:\n${currentFlashcards.map((card, i) => `${i+1}. Q: ${card.question} | A: ${card.answer}`).join('\n')}`
+                : '\n\nCURRENT FLASHCARDS: (none yet)';
+              
+              explainerMessages.push({ 
+                role: 'user', 
+                content: `The Critic provided this feedback: "${content}"${flashcardSummary}\n\nPlease address their suggestions and refine the flashcard set accordingly. Focus on their specific feedback while maintaining educational value.` 
               });
             }
           }
 
-          // Remove duplicates based on question similarity
-          const uniqueFlashcards = flashcards.filter((card, index, arr) => 
-            arr.findIndex(c => c.question.toLowerCase() === card.question.toLowerCase()) === index
-          );
+          sendUpdate({ type: 'status', message: 'Finalizing flashcard set...', progress: 95 });
 
-          sendUpdate({ type: 'status', message: 'Finalizing results...', progress: 95 });
-
-          // Send final results
+          // Send final results with the iteratively refined flashcards
           sendUpdate({
             type: 'complete',
             data: {
               topic,
               conversation,
-              flashcards: uniqueFlashcards,
+              flashcards: currentFlashcards,
             },
             progress: 100
           });

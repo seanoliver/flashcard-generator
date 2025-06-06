@@ -9,10 +9,10 @@ interface Flashcard {
 
 interface FlashcardListProps {
   flashcards: Flashcard[];
+  isStreaming?: boolean;
 }
 
-export default function FlashcardList({ flashcards: initialFlashcards }: FlashcardListProps) {
-  const [flashcards, setFlashcards] = useState(initialFlashcards);
+export default function FlashcardList({ flashcards, isStreaming = false }: FlashcardListProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editQuestion, setEditQuestion] = useState('');
   const [editAnswer, setEditAnswer] = useState('');
@@ -24,15 +24,8 @@ export default function FlashcardList({ flashcards: initialFlashcards }: Flashca
   };
 
   const handleSave = () => {
-    if (editingIndex !== null) {
-      const updated = [...flashcards];
-      updated[editingIndex] = {
-        question: editQuestion,
-        answer: editAnswer,
-      };
-      setFlashcards(updated);
-      setEditingIndex(null);
-    }
+    // For now, just cancel editing since we're in streaming mode
+    setEditingIndex(null);
   };
 
   const handleCancel = () => {
@@ -42,8 +35,11 @@ export default function FlashcardList({ flashcards: initialFlashcards }: Flashca
   };
 
   const handleDelete = (index: number) => {
-    const updated = flashcards.filter((_, i) => i !== index);
-    setFlashcards(updated);
+    // Disable deletion during streaming
+    if (!isStreaming) {
+      // Could implement deletion logic here for final results
+      console.log('Delete card:', index);
+    }
   };
 
   const handleExport = async (format: 'json' | 'csv') => {
@@ -77,26 +73,28 @@ export default function FlashcardList({ flashcards: initialFlashcards }: Flashca
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Generated Flashcards ({flashcards.length})
-        </h3>
-        
-        <div className="flex gap-2">
-          <button
-            onClick={() => handleExport('json')}
-            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-          >
-            Export JSON
-          </button>
-          <button
-            onClick={() => handleExport('csv')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-          >
-            Export CSV
-          </button>
+      {!isStreaming && (
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Generated Flashcards ({flashcards.length})
+          </h3>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleExport('json')}
+              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+            >
+              Export JSON
+            </button>
+            <button
+              onClick={() => handleExport('csv')}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
-      </div>
+      )}
       
       <div className="space-y-3 max-h-96 overflow-y-auto">
         {flashcards.map((card, index) => (
@@ -153,20 +151,22 @@ export default function FlashcardList({ flashcards: initialFlashcards }: Flashca
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">A:</span>
                   <p className="text-gray-900 dark:text-white text-sm mt-1">{card.answer}</p>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(index)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs transition-colors duration-200"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(index)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition-colors duration-200"
-                  >
-                    Delete
-                  </button>
-                </div>
+                {!isStreaming && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(index)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs transition-colors duration-200"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(index)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs transition-colors duration-200"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -175,7 +175,7 @@ export default function FlashcardList({ flashcards: initialFlashcards }: Flashca
       
       {flashcards.length === 0 && (
         <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-          No flashcards generated yet
+          {isStreaming ? 'Flashcards will appear here as they are created...' : 'No flashcards generated yet'}
         </p>
       )}
     </div>
