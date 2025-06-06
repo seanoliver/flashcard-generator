@@ -86,29 +86,59 @@ FLASHCARD: Q: [question] | A: [answer]`;
             if (turn % 2 === 0) {
               // Explainer's turn
               sendUpdate({ type: 'status', message: 'Expert Explainer is thinking...', progress });
-              const response = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
-                messages: explainerMessages,
-                temperature: 0.7,
-                max_tokens: 600,
-              });
-
-              const content = response.choices[0]?.message?.content || '';
               
+              // Create message placeholder
+              const messageId = `explainer-${turn}`;
               const message: FlashcardMessage = {
                 role: 'explainer',
-                content,
+                content: '',
                 timestamp: Date.now(),
               };
               
               conversation.push(message);
               
-              // Send the new message immediately
+              // Send initial message structure
               sendUpdate({ 
-                type: 'message', 
-                message, 
+                type: 'message_start', 
+                messageId,
+                message: { ...message },
                 progress,
                 conversationLength: conversation.length 
+              });
+
+              const stream = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: explainerMessages,
+                temperature: 0.7,
+                max_tokens: 600,
+                stream: true,
+              });
+
+              let content = '';
+              for await (const chunk of stream) {
+                const delta = chunk.choices[0]?.delta?.content || '';
+                content += delta;
+                
+                // Update the message in conversation
+                const messageIndex = conversation.length - 1;
+                conversation[messageIndex].content = content;
+                
+                // Send token update
+                sendUpdate({
+                  type: 'message_token',
+                  messageId,
+                  token: delta,
+                  content,
+                  progress
+                });
+              }
+              
+              // Send completion
+              sendUpdate({
+                type: 'message_complete',
+                messageId,
+                finalContent: content,
+                progress
               });
 
               explainerMessages.push({ role: 'assistant', content });
@@ -117,29 +147,59 @@ FLASHCARD: Q: [question] | A: [answer]`;
             } else {
               // Critic's turn
               sendUpdate({ type: 'status', message: 'Critical Reviewer is analyzing...', progress });
-              const response = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
-                messages: criticMessages,
-                temperature: 0.7,
-                max_tokens: 600,
-              });
-
-              const content = response.choices[0]?.message?.content || '';
               
+              // Create message placeholder
+              const messageId = `critic-${turn}`;
               const message: FlashcardMessage = {
                 role: 'critic',
-                content,
+                content: '',
                 timestamp: Date.now(),
               };
               
               conversation.push(message);
               
-              // Send the new message immediately
+              // Send initial message structure
               sendUpdate({ 
-                type: 'message', 
-                message, 
+                type: 'message_start', 
+                messageId,
+                message: { ...message },
                 progress,
                 conversationLength: conversation.length 
+              });
+
+              const stream = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: criticMessages,
+                temperature: 0.7,
+                max_tokens: 600,
+                stream: true,
+              });
+
+              let content = '';
+              for await (const chunk of stream) {
+                const delta = chunk.choices[0]?.delta?.content || '';
+                content += delta;
+                
+                // Update the message in conversation
+                const messageIndex = conversation.length - 1;
+                conversation[messageIndex].content = content;
+                
+                // Send token update
+                sendUpdate({
+                  type: 'message_token',
+                  messageId,
+                  token: delta,
+                  content,
+                  progress
+                });
+              }
+              
+              // Send completion
+              sendUpdate({
+                type: 'message_complete',
+                messageId,
+                finalContent: content,
+                progress
               });
 
               criticMessages.push({ role: 'assistant', content });

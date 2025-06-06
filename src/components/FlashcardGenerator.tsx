@@ -31,7 +31,8 @@ export default function FlashcardGenerator() {
     conversation: FlashcardMessage[];
     status: string;
     progress: number;
-  }>({ conversation: [], status: '', progress: 0 });
+    activeStreams: Map<string, FlashcardMessage>;
+  }>({ conversation: [], status: '', progress: 0, activeStreams: new Map() });
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -42,7 +43,7 @@ export default function FlashcardGenerator() {
     setIsGenerating(true);
     setError(null);
     setResult(null);
-    setStreamingData({ conversation: [], status: '', progress: 0 });
+    setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map() });
 
     try {
       console.log('Sending request for topic:', topic, 'rounds:', rounds);
@@ -89,12 +90,56 @@ export default function FlashcardGenerator() {
                   status: data.message,
                   progress: data.progress
                 }));
-              } else if (data.type === 'message') {
-                setStreamingData(prev => ({
-                  ...prev,
-                  conversation: [...prev.conversation, data.message],
-                  progress: data.progress
-                }));
+              } else if (data.type === 'message_start') {
+                // Add new streaming message
+                setStreamingData(prev => {
+                  const newActiveStreams = new Map(prev.activeStreams);
+                  newActiveStreams.set(data.messageId, data.message);
+                  return {
+                    ...prev,
+                    conversation: [...prev.conversation, data.message],
+                    progress: data.progress,
+                    activeStreams: newActiveStreams
+                  };
+                });
+              } else if (data.type === 'message_token') {
+                // Update streaming content
+                setStreamingData(prev => {
+                  const newActiveStreams = new Map(prev.activeStreams);
+                  const existingMessage = newActiveStreams.get(data.messageId);
+                  if (existingMessage) {
+                    const updatedMessage = { ...existingMessage, content: data.content };
+                    newActiveStreams.set(data.messageId, updatedMessage);
+                    
+                    // Update conversation array - find by timestamp and role
+                    const newConversation = [...prev.conversation];
+                    const messageIndex = newConversation.findIndex(msg => 
+                      msg.timestamp === existingMessage.timestamp && msg.role === existingMessage.role
+                    );
+                    if (messageIndex !== -1) {
+                      newConversation[messageIndex] = updatedMessage;
+                    }
+                    
+                    return {
+                      ...prev,
+                      conversation: newConversation,
+                      progress: data.progress,
+                      activeStreams: newActiveStreams
+                    };
+                  }
+                  return prev;
+                });
+              } else if (data.type === 'message_complete') {
+                // Remove from active streams
+                setStreamingData(prev => {
+                  const newActiveStreams = new Map(prev.activeStreams);
+                  newActiveStreams.delete(data.messageId);
+                  return {
+                    ...prev,
+                    progress: data.progress,
+                    activeStreams: newActiveStreams
+                  };
+                });
               } else if (data.type === 'complete') {
                 setResult(data.data);
                 setStreamingData(prev => ({ ...prev, progress: 100 }));
@@ -119,7 +164,7 @@ export default function FlashcardGenerator() {
     setResult(null);
     setTopic('');
     setError(null);
-    setStreamingData({ conversation: [], status: '', progress: 0 });
+    setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map() });
   };
 
   return (
@@ -196,7 +241,10 @@ export default function FlashcardGenerator() {
                     <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">
                       Live Conversation
                     </h4>
-                    <ConversationDisplay conversation={streamingData.conversation} />
+                    <ConversationDisplay 
+                      conversation={streamingData.conversation} 
+                      activeStreams={streamingData.activeStreams}
+                    />
                   </div>
                 )}
               </div>
