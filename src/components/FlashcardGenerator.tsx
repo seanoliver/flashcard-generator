@@ -5,9 +5,10 @@ import ConversationDisplay from './ConversationDisplay';
 import FlashcardList from './FlashcardList';
 
 interface FlashcardMessage {
-  role: 'explainer' | 'critic';
+  role: 'generator' | 'memory_expert' | 'subject_expert';
   content: string;
   timestamp: number;
+  speaker: string;
 }
 
 interface Flashcard {
