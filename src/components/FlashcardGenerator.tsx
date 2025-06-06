@@ -150,7 +150,13 @@ export default function FlashcardGenerator() {
                 }));
               } else if (data.type === 'complete') {
                 setResult(data.data);
-                setStreamingData(prev => ({ ...prev, progress: 100 }));
+                setStreamingData(prev => ({ 
+                  ...prev, 
+                  progress: 100,
+                  // Keep the streaming data for display in final results
+                  currentFlashcards: data.data.flashcards,
+                  conversation: data.data.conversation
+                }));
               } else if (data.type === 'error') {
                 throw new Error(data.error);
               }
@@ -229,7 +235,7 @@ export default function FlashcardGenerator() {
       )}
 
       {/* Generation in progress or results view */}
-      {(isGenerating || result) && (
+      {(isGenerating || result || streamingData.conversation.length > 0) && (
         <>
           {/* Desktop layout */}
           <div className="hidden lg:flex h-full">
@@ -238,7 +244,7 @@ export default function FlashcardGenerator() {
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Flashcards ({isGenerating ? streamingData.currentFlashcards.length : result?.flashcards.length || 0})
+                    Flashcards ({(result?.flashcards || streamingData.currentFlashcards).length})
                   </h3>
                   <button
                     onClick={handleReset}
@@ -256,7 +262,7 @@ export default function FlashcardGenerator() {
               
               <div className="flex-1 overflow-hidden">
                 <FlashcardList 
-                  flashcards={isGenerating ? streamingData.currentFlashcards : result?.flashcards || []} 
+                  flashcards={result?.flashcards || streamingData.currentFlashcards} 
                   isStreaming={isGenerating}
                 />
               </div>
@@ -298,7 +304,7 @@ export default function FlashcardGenerator() {
               {/* Chat content */}
               <div className="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900">
                 <ConversationDisplay 
-                  conversation={isGenerating ? streamingData.conversation : result?.conversation || []} 
+                  conversation={result?.conversation || streamingData.conversation} 
                   activeStreams={isGenerating ? streamingData.activeStreams : undefined}
                 />
               </div>
@@ -311,7 +317,7 @@ export default function FlashcardGenerator() {
             <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {isGenerating ? 'Generating...' : result?.topic}
+                  {isGenerating ? 'Generating...' : (result?.topic || 'Results')}
                 </h3>
                 <button
                   onClick={handleReset}
@@ -348,12 +354,12 @@ export default function FlashcardGenerator() {
               <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                 <div className="p-3 border-b border-gray-200 dark:border-gray-700">
                   <h4 className="font-medium text-gray-900 dark:text-white">
-                    Flashcards ({isGenerating ? streamingData.currentFlashcards.length : result?.flashcards.length || 0})
+                    Flashcards ({(result?.flashcards || streamingData.currentFlashcards).length})
                   </h4>
                 </div>
                 <div className="max-h-64 overflow-y-auto">
                   <FlashcardList 
-                    flashcards={isGenerating ? streamingData.currentFlashcards : result?.flashcards || []} 
+                    flashcards={result?.flashcards || streamingData.currentFlashcards} 
                     isStreaming={isGenerating}
                   />
                 </div>
@@ -368,7 +374,7 @@ export default function FlashcardGenerator() {
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <ConversationDisplay 
-                    conversation={isGenerating ? streamingData.conversation : result?.conversation || []} 
+                    conversation={result?.conversation || streamingData.conversation} 
                     activeStreams={isGenerating ? streamingData.activeStreams : undefined}
                   />
                 </div>

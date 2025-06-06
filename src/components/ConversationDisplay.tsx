@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 interface FlashcardMessage {
   role: 'explainer' | 'critic';
@@ -70,12 +71,31 @@ export default function ConversationDisplay({ conversation, activeStreams }: Con
                   </span>
                 )}
               </div>
-              <p className="text-gray-700 dark:text-gray-300 text-sm whitespace-pre-wrap">
-                {message.content}
+              <div className="text-gray-700 dark:text-gray-300 text-sm">
+                <ReactMarkdown
+                  components={{
+                    // Customize markdown elements for better styling
+                    p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+                    ul: ({ children }) => <ul className="mb-3 pl-4 list-disc space-y-1">{children}</ul>,
+                    ol: ({ children }) => <ol className="mb-3 pl-4 list-decimal space-y-1">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-white">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    code: ({ children }) => <code className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs font-mono text-gray-800 dark:text-gray-200">{children}</code>,
+                    pre: ({ children }) => <pre className="bg-gray-100 dark:bg-gray-700 p-3 rounded text-xs font-mono overflow-x-auto mb-3 border">{children}</pre>,
+                    h1: ({ children }) => <h1 className="text-lg font-bold mb-3 text-gray-900 dark:text-white">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-base font-bold mb-2 text-gray-900 dark:text-white">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-bold mb-2 text-gray-900 dark:text-white">{children}</h3>,
+                    blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic mb-3">{children}</blockquote>,
+                    a: ({ href, children }) => <a href={href} className="text-blue-600 dark:text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>,
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
                 {isStreaming && (
                   <span className="inline-block w-2 h-4 bg-gray-400 ml-1 animate-pulse"></span>
                 )}
-              </p>
+              </div>
             </div>
           );
         })}
