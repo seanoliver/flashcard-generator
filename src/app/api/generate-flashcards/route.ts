@@ -5,6 +5,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const MAX_TOKENS = 2000;
+
 interface FlashcardMessage {
   role: 'explainer' | 'critic';
   content: string;
@@ -18,7 +20,7 @@ interface Flashcard {
 
 export async function POST(request: NextRequest) {
   console.log('API route called');
-  
+
   try {
     const { topic, rounds = 6 } = await request.json();
     console.log('Received topic:', topic, 'Rounds:', rounds);
@@ -114,7 +116,7 @@ DELETE: [question to remove]`;
 
             // Remove deleted cards
             operations.deletions.forEach(questionToDelete => {
-              updated = updated.filter(card => 
+              updated = updated.filter(card =>
                 !card.question.toLowerCase().includes(questionToDelete.toLowerCase()) &&
                 !questionToDelete.toLowerCase().includes(card.question.toLowerCase())
               );
@@ -122,7 +124,7 @@ DELETE: [question to remove]`;
 
             // Add new cards (avoiding duplicates)
             operations.newCards.forEach(newCard => {
-              const isDuplicate = updated.some(existingCard => 
+              const isDuplicate = updated.some(existingCard =>
                 existingCard.question.toLowerCase() === newCard.question.toLowerCase()
               );
               if (!isDuplicate) {
@@ -149,11 +151,11 @@ DELETE: [question to remove]`;
           for (let turn = 0; turn < rounds; turn++) {
             const progress = Math.round((turn / rounds) * 80); // Reserve 20% for final processing
             sendUpdate({ type: 'status', message: `Turn ${turn + 1}/${rounds}`, progress });
-            
+
             if (turn % 2 === 0) {
               // Explainer's turn
               sendUpdate({ type: 'status', message: 'Expert Explainer is thinking...', progress });
-              
+
               // Create message placeholder
               const messageId = `explainer-${turn}`;
               const message: FlashcardMessage = {
@@ -161,23 +163,23 @@ DELETE: [question to remove]`;
                 content: '',
                 timestamp: Date.now(),
               };
-              
+
               conversation.push(message);
-              
+
               // Send initial message structure
-              sendUpdate({ 
-                type: 'message_start', 
+              sendUpdate({
+                type: 'message_start',
                 messageId,
                 message: { ...message },
                 progress,
-                conversationLength: conversation.length 
+                conversationLength: conversation.length
               });
 
               const stream = await openai.chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: explainerMessages,
                 temperature: 0.7,
-                max_tokens: 600,
+                max_tokens: MAX_TOKENS,
                 stream: true,
               });
 
@@ -185,11 +187,11 @@ DELETE: [question to remove]`;
               for await (const chunk of stream) {
                 const delta = chunk.choices[0]?.delta?.content || '';
                 content += delta;
-                
+
                 // Update the message in conversation
                 const messageIndex = conversation.length - 1;
                 conversation[messageIndex].content = content;
-                
+
                 // Send token update
                 sendUpdate({
                   type: 'message_token',
@@ -199,11 +201,11 @@ DELETE: [question to remove]`;
                   progress
                 });
               }
-              
+
               // Extract and apply flashcard operations
               const operations = extractFlashcardOperations(content);
               currentFlashcards = applyOperations(currentFlashcards, operations);
-              
+
               // Send updated flashcard state
               sendUpdate({
                 type: 'flashcards_updated',
@@ -211,7 +213,7 @@ DELETE: [question to remove]`;
                 operations,
                 progress
               });
-              
+
               // Send completion
               sendUpdate({
                 type: 'message_complete',
@@ -221,21 +223,21 @@ DELETE: [question to remove]`;
               });
 
               explainerMessages.push({ role: 'assistant', content });
-              
+
               // Prepare critic's context with current flashcard state
-              const flashcardSummary = currentFlashcards.length > 0 
+              const flashcardSummary = currentFlashcards.length > 0
                 ? `\n\nCURRENT FLASHCARDS:\n${currentFlashcards.map((card, i) => `${i+1}. Q: ${card.question} | A: ${card.answer}`).join('\n')}`
                 : '\n\nCURRENT FLASHCARDS: (none yet)';
-              
-              criticMessages.push({ 
-                role: 'user', 
-                content: `The Explainer provided this feedback on the flashcards: "${content}"${flashcardSummary}\n\nPlease review the current flashcard set and provide your critique. Focus on accuracy, clarity, and completeness. Suggest specific improvements or new cards.` 
+
+              criticMessages.push({
+                role: 'user',
+                content: `The Explainer provided this feedback on the flashcards: "${content}"${flashcardSummary}\n\nPlease review the current flashcard set and provide your critique. Focus on accuracy, clarity, and completeness. Suggest specific improvements or new cards.`
               });
 
             } else {
               // Critic's turn
               sendUpdate({ type: 'status', message: 'Critical Reviewer is analyzing...', progress });
-              
+
               // Create message placeholder
               const messageId = `critic-${turn}`;
               const message: FlashcardMessage = {
@@ -243,23 +245,23 @@ DELETE: [question to remove]`;
                 content: '',
                 timestamp: Date.now(),
               };
-              
+
               conversation.push(message);
-              
+
               // Send initial message structure
-              sendUpdate({ 
-                type: 'message_start', 
+              sendUpdate({
+                type: 'message_start',
                 messageId,
                 message: { ...message },
                 progress,
-                conversationLength: conversation.length 
+                conversationLength: conversation.length
               });
 
               const stream = await openai.chat.completions.create({
                 model: 'gpt-4o-mini',
                 messages: criticMessages,
                 temperature: 0.7,
-                max_tokens: 600,
+                max_tokens: MAX_TOKENS,
                 stream: true,
               });
 
@@ -267,11 +269,11 @@ DELETE: [question to remove]`;
               for await (const chunk of stream) {
                 const delta = chunk.choices[0]?.delta?.content || '';
                 content += delta;
-                
+
                 // Update the message in conversation
                 const messageIndex = conversation.length - 1;
                 conversation[messageIndex].content = content;
-                
+
                 // Send token update
                 sendUpdate({
                   type: 'message_token',
@@ -281,11 +283,11 @@ DELETE: [question to remove]`;
                   progress
                 });
               }
-              
+
               // Extract and apply flashcard operations
               const operations = extractFlashcardOperations(content);
               currentFlashcards = applyOperations(currentFlashcards, operations);
-              
+
               // Send updated flashcard state
               sendUpdate({
                 type: 'flashcards_updated',
@@ -293,7 +295,7 @@ DELETE: [question to remove]`;
                 operations,
                 progress
               });
-              
+
               // Send completion
               sendUpdate({
                 type: 'message_complete',
@@ -303,15 +305,15 @@ DELETE: [question to remove]`;
               });
 
               criticMessages.push({ role: 'assistant', content });
-              
+
               // Prepare explainer's context with current flashcard state
-              const flashcardSummary = currentFlashcards.length > 0 
+              const flashcardSummary = currentFlashcards.length > 0
                 ? `\n\nCURRENT FLASHCARDS:\n${currentFlashcards.map((card, i) => `${i+1}. Q: ${card.question} | A: ${card.answer}`).join('\n')}`
                 : '\n\nCURRENT FLASHCARDS: (none yet)';
-              
-              explainerMessages.push({ 
-                role: 'user', 
-                content: `The Critic provided this feedback: "${content}"${flashcardSummary}\n\nPlease address their suggestions and refine the flashcard set accordingly. Focus on their specific feedback while maintaining educational value.` 
+
+              explainerMessages.push({
+                role: 'user',
+                content: `The Critic provided this feedback: "${content}"${flashcardSummary}\n\nPlease address their suggestions and refine the flashcard set accordingly. Focus on their specific feedback while maintaining educational value.`
               });
             }
           }
@@ -330,8 +332,8 @@ DELETE: [question to remove]`;
           });
 
         } catch (error) {
-          sendUpdate({ 
-            type: 'error', 
+          sendUpdate({
+            type: 'error',
             error: error instanceof Error ? error.message : 'Unknown error',
             progress: 0
           });
