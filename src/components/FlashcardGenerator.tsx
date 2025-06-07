@@ -19,6 +19,16 @@ interface Flashcard {
   id?: string;
 }
 
+interface RoundProgress {
+  currentRound: number;
+  totalRounds: number;
+  passesRemaining: number;
+}
+
+interface ExpertContribution {
+  [expertName: string]: number;
+}
+
 interface GenerationResult {
   topic: string;
   conversation: FlashcardMessage[];
@@ -42,7 +52,17 @@ export default function FlashcardGenerator() {
     progress: number;
     activeStreams: Map<string, FlashcardMessage>;
     currentFlashcards: Flashcard[];
-  }>({ conversation: [], status: '', progress: 0, activeStreams: new Map(), currentFlashcards: [] });
+    roundProgress: RoundProgress | null;
+    expertContributions: ExpertContribution;
+  }>({
+    conversation: [],
+    status: '',
+    progress: 0,
+    activeStreams: new Map(),
+    currentFlashcards: [],
+    roundProgress: null,
+    expertContributions: {}
+  });
 
   const handleGenerate = async () => {
     if (!topic.trim()) {
@@ -53,11 +73,19 @@ export default function FlashcardGenerator() {
     setIsGenerating(true);
     setError(null);
     setResult(null);
-    setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map(), currentFlashcards: [] });
+    setStreamingData({
+      conversation: [],
+      status: '',
+      progress: 0,
+      activeStreams: new Map(),
+      currentFlashcards: [],
+      roundProgress: null,
+      expertContributions: {}
+    });
 
     try {
       console.log('Sending request for topic:', topic, 'config:', config);
-      
+
       const response = await fetch('/api/generate-flashcards', {
         method: 'POST',
         headers: {
@@ -83,7 +111,7 @@ export default function FlashcardGenerator() {
 
       while (true) {
         const { done, value } = await reader.read();
-        
+
         if (done) break;
 
         const chunk = decoder.decode(value);
@@ -93,7 +121,7 @@ export default function FlashcardGenerator() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              
+
               if (data.type === 'status') {
                 setStreamingData(prev => ({
                   ...prev,
@@ -120,16 +148,16 @@ export default function FlashcardGenerator() {
                   if (existingMessage) {
                     const updatedMessage = { ...existingMessage, content: data.content };
                     newActiveStreams.set(data.messageId, updatedMessage);
-                    
+
                     // Update conversation array - find by timestamp and role
                     const newConversation = [...prev.conversation];
-                    const messageIndex = newConversation.findIndex(msg => 
+                    const messageIndex = newConversation.findIndex(msg =>
                       msg.timestamp === existingMessage.timestamp && msg.role === existingMessage.role
                     );
                     if (messageIndex !== -1) {
                       newConversation[messageIndex] = updatedMessage;
                     }
-                    
+
                     return {
                       ...prev,
                       conversation: newConversation,
@@ -157,10 +185,18 @@ export default function FlashcardGenerator() {
                   currentFlashcards: data.flashcards,
                   progress: data.progress
                 }));
+              } else if (data.type === 'round_progress') {
+                // Update round progress and expert contributions
+                setStreamingData(prev => ({
+                  ...prev,
+                  roundProgress: data.roundProgress,
+                  expertContributions: data.expertContributions,
+                  progress: data.progress
+                }));
               } else if (data.type === 'complete') {
                 setResult(data.data);
-                setStreamingData(prev => ({ 
-                  ...prev, 
+                setStreamingData(prev => ({
+                  ...prev,
                   progress: 100,
                   // Keep the streaming data for display in final results
                   currentFlashcards: data.data.flashcards,
@@ -187,7 +223,15 @@ export default function FlashcardGenerator() {
     setResult(null);
     setTopic('');
     setError(null);
-    setStreamingData({ conversation: [], status: '', progress: 0, activeStreams: new Map(), currentFlashcards: [] });
+    setStreamingData({
+      conversation: [],
+      status: '',
+      progress: 0,
+      activeStreams: new Map(),
+      currentFlashcards: [],
+      roundProgress: null,
+      expertContributions: {}
+    });
     setConfig({
       NUM_ROUNDS: 5,
       MAX_EXPERT_PASSES: 5,
@@ -205,7 +249,7 @@ export default function FlashcardGenerator() {
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-6 text-center">
               Enter a Topic to Study
             </h2>
-            
+
             <div className="space-y-4">
               <input
                 type="text"
@@ -215,7 +259,7 @@ export default function FlashcardGenerator() {
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
               />
-              
+
               <div>
                 <label htmlFor="rounds" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Panel Rounds (default: 5)
@@ -233,7 +277,7 @@ export default function FlashcardGenerator() {
                   Each round allows expert panel discussion and collaboration
                 </p>
               </div>
-              
+
               <div>
                 <label htmlFor="max-passes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Max Expert Handoffs (default: 5)
@@ -251,7 +295,7 @@ export default function FlashcardGenerator() {
                   How many times experts can pass to each other per round
                 </p>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Expert Panel Members
@@ -294,11 +338,11 @@ export default function FlashcardGenerator() {
                   Select which expert perspectives to include in the panel
                 </p>
               </div>
-              
+
               {error && (
                 <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
               )}
-              
+
               <button
                 onClick={handleGenerate}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
@@ -335,10 +379,10 @@ export default function FlashcardGenerator() {
                   </p>
                 )}
               </div>
-              
+
               <div className="flex-1 overflow-hidden">
-                <FlashcardList 
-                  flashcards={result?.flashcards || streamingData.currentFlashcards} 
+                <FlashcardList
+                  flashcards={result?.flashcards || streamingData.currentFlashcards}
                   isStreaming={isGenerating}
                 />
               </div>
@@ -355,7 +399,7 @@ export default function FlashcardGenerator() {
                   {isGenerating && (
                     <div className="flex items-center gap-3">
                       <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                        <div 
+                        <div
                           className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                           style={{ width: `${streamingData.progress}%` }}
                         ></div>
@@ -366,7 +410,7 @@ export default function FlashcardGenerator() {
                     </div>
                   )}
                 </div>
-                
+
                 {isGenerating && (
                   <div className="mt-2 flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
@@ -379,9 +423,11 @@ export default function FlashcardGenerator() {
 
               {/* Chat content */}
               <div className="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900">
-                <ConversationDisplay 
-                  conversation={result?.conversation || streamingData.conversation} 
+                <ConversationDisplay
+                  conversation={result?.conversation || streamingData.conversation}
                   activeStreams={isGenerating ? streamingData.activeStreams : undefined}
+                  roundProgress={streamingData.roundProgress}
+                  expertContributions={streamingData.expertContributions}
                 />
               </div>
             </div>
@@ -402,11 +448,11 @@ export default function FlashcardGenerator() {
                   New Topic
                 </button>
               </div>
-              
+
               {isGenerating && (
                 <div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
-                    <div 
+                    <div
                       className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${streamingData.progress}%` }}
                     ></div>
@@ -434,8 +480,8 @@ export default function FlashcardGenerator() {
                   </h4>
                 </div>
                 <div className="max-h-64 overflow-y-auto">
-                  <FlashcardList 
-                    flashcards={result?.flashcards || streamingData.currentFlashcards} 
+                  <FlashcardList
+                    flashcards={result?.flashcards || streamingData.currentFlashcards}
                     isStreaming={isGenerating}
                   />
                 </div>
@@ -449,9 +495,11 @@ export default function FlashcardGenerator() {
                   </h4>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <ConversationDisplay 
-                    conversation={result?.conversation || streamingData.conversation} 
+                  <ConversationDisplay
+                    conversation={result?.conversation || streamingData.conversation}
                     activeStreams={isGenerating ? streamingData.activeStreams : undefined}
+                    roundProgress={streamingData.roundProgress}
+                    expertContributions={streamingData.expertContributions}
                   />
                 </div>
               </div>

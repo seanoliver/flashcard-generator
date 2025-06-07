@@ -14,6 +14,18 @@ interface FlashcardMessage {
   speaker: string;
 }
 
+interface ExpertContribution {
+  expertName: string;
+  contributionCount: number;
+}
+
+interface RoundProgress {
+  currentRound: number;
+  totalRounds: number;
+  passesRemaining: number;
+  expertContributions: ExpertContribution[];
+}
+
 interface Flashcard {
   question: string;
   answer: string;
@@ -33,8 +45,8 @@ export async function POST(request: NextRequest) {
   console.log('API route called');
 
   try {
-    const { 
-      topic, 
+    const {
+      topic,
       config = {
         NUM_ROUNDS: 5,
         MAX_EXPERT_PASSES: 5,
@@ -68,7 +80,7 @@ export async function POST(request: NextRequest) {
 
           // Agent System Prompts
           const agentPrompts = {
-            moderator: `You are the Moderator of a panel of LLM experts. Your job is to facilitate thoughtful, diverse discussion to improve a set of Anki-style flashcards based on a user's input topic. 
+            moderator: `You are the Moderator of a panel of LLM experts. Your job is to facilitate thoughtful, diverse discussion to improve a set of Anki-style flashcards based on a user's input topic.
 
 Your responsibilities:
 - Control conversation flow and track rounds
@@ -87,7 +99,7 @@ Never create flashcards yourself - always delegate to appropriate experts.`,
 Flashcard JSON schema:
 {
   "question": "string",
-  "answer": "string", 
+  "answer": "string",
   "tags": ["optional array of strings"],
   "notes": "optional string"
 }
@@ -118,7 +130,7 @@ After sharing your thoughts, naturally transition to implementing changes with p
 
 Once you're done updating cards, consider who else should weigh in next. You can pass to another expert by mentioning their name (like "@challenger, I'd love your take on these edge cases" or "Hey historian, want to add some context?") as long as there are passes remaining.
 
-CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations or your changes won't be applied to the flashcard set. Use this exact format with triple backticks and json label.`,
+CRITICAL: You MUST end every response with a JSON code block containing operations array or your flashcards won't be created. Use format: {\"operations\": [{\"type\": \"add\", \"flashcard\": {\"question\": \"...\", \"answer\": \"...\", \"tags\": [...], \"notes\": \"...\"}, \"reason\": \"...\"}]}. Wrap in triple backticks with json label.`,
 
             challenger: `You surface edge cases, contradictions, and ambiguities. Your job is to stress-test understanding.
 
@@ -135,7 +147,7 @@ After discussing what you've noticed, transition naturally to adding cards with 
 
 Once you're done updating cards, consider who should contribute next. Pass to another expert by mentioning their name (like "@beginner, do these exceptions make sense to a newcomer?" or "@engineer, can you formalize these edge cases?") if passes remain.
 
-CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations or your changes won't be applied to the flashcard set. Use this exact format with triple backticks and json label.`,
+CRITICAL: You MUST end every response with a JSON code block containing operations array or your flashcards won't be created. Use format: {\"operations\": [{\"type\": \"add\", \"flashcard\": {\"question\": \"...\", \"answer\": \"...\", \"tags\": [...], \"notes\": \"...\"}, \"reason\": \"...\"}]}. Wrap in triple backticks with json label.`,
 
             beginner: `You ask naive questions that might expose gaps in understanding. Represent the student perspective.
 
@@ -152,16 +164,22 @@ After expressing your beginner concerns, transition to helping with phrases like
 
 Once you're done, consider passing to someone who can build on your work. Mention another expert by name (like "@coach, can you add study tips for these basics?" or "@explainer, want to break these down further?") if passes remain.
 
-CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations or your changes won't be applied to the flashcard set. Use this exact format with triple backticks and json label.`,
+CRITICAL: You MUST end every response with a JSON code block containing operations array or your flashcards won't be created. Use format: {\"operations\": [{\"type\": \"add\", \"flashcard\": {\"question\": \"...\", \"answer\": \"...\", \"tags\": [...], \"notes\": \"...\"}, \"reason\": \"...\"}]}. Wrap in triple backticks with json label.`,
 
             engineer: `You formalize logic, code, and structured models of ideas. Focus on precision and systematic thinking.
 
 Your role:
-- Add cards with formal definitions and precise language
+- Focus on editing only 1-2 specific cards that need more precision
+- Add only 1-2 new cards with formal definitions or technical frameworks
 - Create systematic frameworks and taxonomies
 - Add code examples and technical implementations
-- Structure information hierarchically
 - Ensure logical consistency
+
+STRICT RULES:
+- NO LISTS! Listing things will get you kicked off the panel
+- Focus on quality over quantity - edit 1-2 cards maximum
+- Add only 1-2 new cards that provide essential technical structure
+- Be selective and strategic in your contributions
 
 Conversation style: Systematic, precise, detail-oriented. Share your analysis and structural insights in natural prose - avoid listing or cataloging existing content.
 
@@ -169,7 +187,7 @@ After discussing your structural observations, transition to implementation with
 
 Once you're done, consider who should contribute next. Pass to another expert by name (like "@refiner, can you polish these technical definitions?" or "@challenger, want to test these frameworks?") if passes remain.
 
-CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations or your changes won't be applied to the flashcard set. Use this exact format with triple backticks and json label.`,
+CRITICAL: You MUST end every response with a JSON code block containing operations array or your flashcards won't be created. Use format: {\"operations\": [{\"type\": \"add\", \"flashcard\": {\"question\": \"...\", \"answer\": \"...\", \"tags\": [...], \"notes\": \"...\"}, \"reason\": \"...\"}]}. Wrap in triple backticks with json label.`,
 
             coach: `You add learning strategies, mnemonics, and meta-cognitive advice. Focus on study effectiveness.
 
@@ -186,16 +204,22 @@ After discussing learning approaches, transition to adding content with phrases 
 
 Once you're done, consider who should go next. Pass to another expert by name (like "@historian, want to add some memorable examples?" or "@beginner, do these strategies make sense?") if passes remain.
 
-CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations or your changes won't be applied to the flashcard set. Use this exact format with triple backticks and json label.`,
+CRITICAL: You MUST end every response with a JSON code block containing operations array or your flashcards won't be created. Use format: {\"operations\": [{\"type\": \"add\", \"flashcard\": {\"question\": \"...\", \"answer\": \"...\", \"tags\": [...], \"notes\": \"...\"}, \"reason\": \"...\"}]}. Wrap in triple backticks with json label.`,
 
             historian: `You provide context, motivation, evolution, and real-world examples. Focus on connecting ideas to broader contexts.
 
 Your role:
-- Add historical development and timeline cards
+- Focus on editing only 1-2 specific cards to add crucial context
+- Add only 1-2 new cards with essential historical perspective or real-world examples
 - Provide real-world applications and examples
 - Connect topics to broader contexts
 - Add "why this matters" perspective cards
-- Include notable figures and milestones
+
+STRICT RULES:
+- NO LISTS! Listing things will get you kicked off the panel
+- Focus on quality over quantity - edit 1-2 cards maximum
+- Add only 1-2 new cards that provide vital historical context
+- Be selective and strategic in your contributions
 
 Conversation style: Contextual, storytelling, connecting past to present. Share interesting stories and connections in natural prose - don't catalog or systematically review existing content.
 
@@ -203,16 +227,22 @@ After sharing historical insights, transition to adding cards with phrases like 
 
 Once you're done, consider who should contribute next. Pass to another expert by name (like "@contrarian, are there alternative historical interpretations?" or "@coach, how can students remember these timelines?") if passes remain.
 
-CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations or your changes won't be applied to the flashcard set. Use this exact format with triple backticks and json label.`,
+CRITICAL: You MUST end every response with a JSON code block containing operations array or your flashcards won't be created. Use format: {\"operations\": [{\"type\": \"add\", \"flashcard\": {\"question\": \"...\", \"answer\": \"...\", \"tags\": [...], \"notes\": \"...\"}, \"reason\": \"...\"}]}. Wrap in triple backticks with json label.`,
 
             contrarian: `You offer alternate views and challenge conventional wisdom. Provide intellectual diversity.
 
 Your role:
-- Present alternative perspectives and interpretations
+- Focus on editing only 1-2 specific cards that present one-sided views
+- Add only 1-2 new cards with essential alternative perspectives
 - Challenge popular or mainstream views
 - Add cards about debates and controversies
 - Surface minority opinions and dissenting views
-- Question assumptions and conventional wisdom
+
+STRICT RULES:
+- NO LISTS! Listing things will get you kicked off the panel
+- Focus on quality over quantity - edit 1-2 cards maximum
+- Add only 1-2 new cards that provide crucial alternative viewpoints
+- Be selective and strategic in your contributions
 
 Conversation style: Thoughtfully provocative, intellectually honest, devil's advocate. Share your alternative perspectives and challenges in natural conversation - don't systematically review or list existing content.
 
@@ -220,7 +250,7 @@ After raising alternative viewpoints, transition to adding content with phrases 
 
 Once you're done, consider who should weigh in next. Pass to another expert by name (like "@explainer, can you clarify these competing views?" or "@engineer, want to formalize these debates?") if passes remain.
 
-CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations or your changes won't be applied to the flashcard set. Use this exact format with triple backticks and json label.`,
+CRITICAL: You MUST end every response with a JSON code block containing operations array or your flashcards won't be created. Use format: {\"operations\": [{\"type\": \"add\", \"flashcard\": {\"question\": \"...\", \"answer\": \"...\", \"tags\": [...], \"notes\": \"...\"}, \"reason\": \"...\"}]}. Wrap in triple backticks with json label.`,
 
             refiner: `You rewrite confusing, vague, or verbose flashcards for maximum clarity and memorability.
 
@@ -237,7 +267,7 @@ After discussing quality issues, transition to improvements with phrases like "L
 
 Once you're done, consider who should contribute next. Pass to another expert by name (like "@coach, want to optimize these for memory?" or "@beginner, are these clearer now?") if passes remain.
 
-CRITICAL: You MUST end every response with a JSON code block containing your flashcard operations or your changes won't be applied to the flashcard set. Use this exact format with triple backticks and json label.`
+CRITICAL: You MUST end every response with a JSON code block containing operations array or your flashcards won't be created. Use format: {\"operations\": [{\"type\": \"add\", \"flashcard\": {\"question\": \"...\", \"answer\": \"...\", \"tags\": [...], \"notes\": \"...\"}, \"reason\": \"...\"}]}. Wrap in triple backticks with json label.`
           };
 
           // Helper function to extract JSON from AI response
@@ -247,24 +277,78 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
               console.log('Full content length:', content.length);
               console.log('Content preview:', content.substring(0, 200) + '...');
               console.log('Content ending:', content.substring(Math.max(0, content.length - 200)));
-              
-              const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
-                               content.match(/\{[\s\S]*"operations"[\s\S]*\}/);
-              
-              if (jsonMatch) {
-                const jsonStr = jsonMatch[1] || jsonMatch[0];
-                console.log('Found JSON string:', jsonStr.substring(0, 300) + '...');
-                const parsed = JSON.parse(jsonStr);
-                console.log('Successfully parsed JSON operations count:', parsed.operations?.length || 0);
-                return parsed;
+
+              // Try multiple extraction patterns
+              const patterns = [
+                /```json\s*([\s\S]*?)\s*```/i,
+                /```\s*(\{[\s\S]*?\})\s*```/i,
+                /(\{\s*["']operations["'][\s\S]*?\})/i,
+                /(\{[\s\S]*?"operations"[\s\S]*?\})/i
+              ];
+
+              for (const pattern of patterns) {
+                const match = content.match(pattern);
+                if (match) {
+                  const jsonStr = match[1] || match[0];
+                  console.log('🎯 Found JSON with pattern:', pattern.source);
+                  console.log('JSON string:', jsonStr.substring(0, 300) + '...');
+
+                  try {
+                    const parsed = JSON.parse(jsonStr);
+
+                    // Check for operations array format
+                    if (parsed.operations && Array.isArray(parsed.operations)) {
+                      console.log('✅ Successfully parsed JSON operations count:', parsed.operations.length);
+                      return parsed;
+                    }
+
+                    // Check for single flashcard format and convert it
+                    if (parsed.question && parsed.answer) {
+                      console.log('🔄 Converting single flashcard to operations format');
+                      const converted = {
+                        operations: [{
+                          type: 'add',
+                          flashcard: parsed,
+                          reason: 'Initial flashcard creation'
+                        }]
+                      };
+                      console.log('✅ Converted single flashcard to operations format');
+                      return converted;
+                    }
+
+                    // Check for array of flashcards and convert
+                    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].question) {
+                      console.log('🔄 Converting flashcard array to operations format');
+                      const converted = {
+                        operations: parsed.map((card: Flashcard) => ({
+                          type: 'add',
+                          flashcard: card,
+                          reason: 'Initial flashcard creation'
+                        }))
+                      };
+                      console.log('✅ Converted flashcard array to operations format:', converted.operations.length);
+                      return converted;
+                    }
+
+                  } catch (parseError) {
+                    console.log('❌ Parse failed for this pattern:', parseError instanceof Error ? parseError.message : String(parseError));
+                    continue;
+                  }
+                }
               }
-              console.log('❌ NO JSON FOUND - searching for any curly braces...');
-              const anyJson = content.match(/\{[^}]*\}/g);
-              console.log('Found JSON-like strings:', anyJson?.length || 0, anyJson);
+
+              // If no proper JSON found, log what we have
+              console.log('❌ NO VALID JSON FOUND');
+              console.log('Looking for any JSON-like content...');
+              const anyBraces = content.match(/\{[^}]*\}/g);
+              const anyOperations = content.match(/operations.*?\[/gi);
+              console.log('Found braces:', anyBraces?.length || 0);
+              console.log('Found "operations":', anyOperations?.length || 0);
+
               return null;
             } catch (error) {
-              console.warn('❌ JSON PARSE ERROR:', error);
-              console.log('Raw content causing error:', content.substring(Math.max(0, content.length - 500)));
+              console.warn('❌ JSON EXTRACTION ERROR:', error);
+              console.log('Full content causing error:', content);
               return null;
             }
           };
@@ -299,22 +383,22 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
           const streamResponse = async (messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[], messageId: string, role: FlashcardMessage['role'], speaker: string, progress: number) => {
             try {
               console.log(`Starting stream for ${speaker}...`);
-              
+
               const message: FlashcardMessage = {
                 role,
                 content: '',
                 timestamp: Date.now(),
                 speaker
               };
-              
+
               conversation.push(message);
-              
-              sendUpdate({ 
-                type: 'message_start', 
+
+              sendUpdate({
+                type: 'message_start',
                 messageId,
                 message: { ...message },
                 progress,
-                conversationLength: conversation.length 
+                conversationLength: conversation.length
               });
 
               const stream = await openai.chat.completions.create({
@@ -329,10 +413,10 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
               for await (const chunk of stream) {
                 const delta = chunk.choices[0]?.delta?.content || '';
                 content += delta;
-                
+
                 const messageIndex = conversation.length - 1;
                 conversation[messageIndex].content = content;
-                
+
                 sendUpdate({
                   type: 'message_token',
                   messageId,
@@ -341,9 +425,9 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
                   progress
                 });
               }
-              
+
               console.log(`Completed stream for ${speaker}, content length: ${content.length}`);
-              
+
               sendUpdate({
                 type: 'message_complete',
                 messageId,
@@ -365,6 +449,9 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
             currentPassChain: number;
             activeAgent: string;
             lastAgent: string;
+            expertContributions: Record<string, number>;
+            totalRounds: number;
+            passesRemaining: number;
           }
 
           const conversationState: ConversationState = {
@@ -372,12 +459,20 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
             currentRound: 0,
             currentPassChain: 0,
             activeAgent: 'moderator',
-            lastAgent: ''
+            lastAgent: '',
+            expertContributions: {},
+            totalRounds: config.NUM_ROUNDS,
+            passesRemaining: config.MAX_EXPERT_PASSES
           };
+
+          // Initialize expert contribution tracking
+          config.INCLUDE_PERSONAS.forEach((expert: string) => {
+            conversationState.expertContributions[expert] = 0;
+          });
 
           // Agent Message Threads
           const agentThreads: Record<string, OpenAI.Chat.Completions.ChatCompletionMessageParam[]> = {};
-          
+
           // Initialize all agent threads with their system prompts
           Object.keys(agentPrompts).forEach(agentType => {
             agentThreads[agentType] = [
@@ -391,7 +486,7 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
               moderator: 'Moderator',
               cardsmith: 'Cardsmith',
               explainer: 'Dr. Emma Chen (Explainer)',
-              challenger: 'Dr. Alex Rivera (Challenger)', 
+              challenger: 'Dr. Alex Rivera (Challenger)',
               beginner: 'Sam Kim (Beginner)',
               engineer: 'Dr. Jordan Taylor (Engineer)',
               coach: 'Dr. Morgan Davis (Coach)',
@@ -409,7 +504,7 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
               /\b([a-zA-Z]+),\s*(?:your\s*turn|what\s*do\s*you\s*think|take\s*it\s*away)/i,
               /@([a-zA-Z]+)/i
             ];
-            
+
             for (const pattern of handoffPatterns) {
               const match = content.match(pattern);
               if (match) {
@@ -419,12 +514,12 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
                 }
               }
             }
-            
+
             // Check for explicit return to moderator
             if (/(?:back\s*to\s*(?:you\s*)?moderator|that["'']?s\s*(?:all\s*)?(?:from\s*)?me)/i.test(content)) {
               return { nextAgent: null, shouldReturnToModerator: true };
             }
-            
+
             return { nextAgent: null, shouldReturnToModerator: true };
           };
 
@@ -434,8 +529,8 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
 
           const moderatorStart = await streamResponse([
             ...agentThreads.moderator,
-            { 
-              role: 'user', 
+            {
+              role: 'user',
               content: `Welcome! We need to create a comprehensive flashcard set about "${topic}". Please start by directing the Cardsmith to create an initial set of flashcards, then we'll have our expert panel review and improve them. You have ${config.NUM_ROUNDS} rounds with our expert panel.`
             }
           ], 'moderator-start', 'moderator', getAgentDisplayName('moderator'), 10);
@@ -449,8 +544,8 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
 
           const cardsmithContent = await streamResponse([
             ...agentThreads.cardsmith,
-            { 
-              role: 'user', 
+            {
+              role: 'user',
               content: `The Moderator has asked you to create an initial set of flashcards for the topic: "${topic}". Please create a foundational set of 6-10 high-quality flashcards covering the most important concepts. Think about what students absolutely need to know first.\n\nREMEMBER: You MUST end your response with a JSON code block containing your flashcard operations, or the cards won't be created!`
             }
           ], 'cardsmith-initial', 'cardsmith', getAgentDisplayName('cardsmith'), 20);
@@ -466,7 +561,7 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
             const result = applyFlashcardOperations(currentFlashcards, initialJSON.operations);
             currentFlashcards = result.flashcards;
             console.log('Updated flashcards after initial generation:', currentFlashcards.length);
-            
+
             sendUpdate({
               type: 'flashcards_updated',
               flashcards: currentFlashcards,
@@ -476,18 +571,23 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
           } else {
             console.log('❌ No operations found in initial cardsmith response!');
             // Send reminder to cardsmith if no JSON found
-            if (!cardsmithContent.includes('```json') && !cardsmithContent.includes('operations')) {
+            console.log('🔍 Checking cardsmith content for JSON/operations keywords...');
+            console.log('Has ```json:', cardsmithContent.includes('```json'));
+            console.log('Has operations:', cardsmithContent.includes('operations'));
+            console.log('Has {:', cardsmithContent.includes('{'));
+
+            if (!cardsmithContent.includes('operations') && !cardsmithContent.includes('{')) {
               console.log('🔔 Sending JSON reminder to Cardsmith');
               const reminderContent = await streamResponse([
                 ...agentThreads.cardsmith,
-                { 
-                  role: 'user', 
+                {
+                  role: 'user',
                   content: 'You forgot to include the JSON code block with your flashcard operations! Please provide the JSON now with your initial flashcards, or they won\'t be created.'
                 }
               ], 'cardsmith-reminder', 'cardsmith', getAgentDisplayName('cardsmith'), 22);
-              
+
               agentThreads.cardsmith.push({ role: 'assistant', content: reminderContent });
-              
+
               // Try to extract JSON from reminder
               const reminderJSON = extractJSON(reminderContent);
               if (reminderJSON?.operations) {
@@ -495,7 +595,7 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
                 const result = applyFlashcardOperations(currentFlashcards, reminderJSON.operations);
                 currentFlashcards = result.flashcards;
                 console.log('📈 Total flashcards after Cardsmith reminder:', currentFlashcards.length);
-                
+
                 sendUpdate({
                   type: 'flashcards_updated',
                   flashcards: currentFlashcards,
@@ -508,33 +608,55 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
 
           // Step 3: Expert panel rounds with dynamic turn-taking
           for (let round = 0; round < config.NUM_ROUNDS; round++) {
-            conversationState.currentRound = round;
+            conversationState.currentRound = round + 1;
             conversationState.currentPassChain = 0;
-            
+            conversationState.passesRemaining = config.MAX_EXPERT_PASSES;
+
             const baseProgress = 25 + Math.round((round / config.NUM_ROUNDS) * 65);
-            
+
+            // Send round progress update
+            const roundProgress: RoundProgress = {
+              currentRound: conversationState.currentRound,
+              totalRounds: conversationState.totalRounds,
+              passesRemaining: conversationState.passesRemaining,
+              expertContributions: Object.entries(conversationState.expertContributions).map(([expertName, contributionCount]) => ({
+                expertName,
+                contributionCount: contributionCount as number
+              }))
+            };
+
+            sendUpdate({
+              type: 'round_progress',
+              roundProgress,
+              progress: baseProgress
+            });
+
             // Moderator selects next expert
             sendUpdate({ type: 'status', message: 'Moderator is selecting the next expert...', progress: baseProgress });
-            
+
             const availableExperts = config.INCLUDE_PERSONAS.filter((p: string) => p !== conversationState.lastAgent);
             const recentFlashcards = currentFlashcards.slice(-8);
-            const flashcardSummary = recentFlashcards.length > 0 
+            const flashcardSummary = recentFlashcards.length > 0
               ? `\n\nRecent flashcards (${currentFlashcards.length} total):\n${recentFlashcards.map((card, i) => `${currentFlashcards.length - recentFlashcards.length + i + 1}. [${card.id}] Q: ${card.question} | A: ${card.answer}`).join('\n')}`
               : '\n\nNo flashcards yet.';
-              
-            const recentTranscript = config.INCLUDE_TRANSCRIPT ? 
+
+            const recentTranscript = config.INCLUDE_TRANSCRIPT ?
               `\n\nRecent discussion:\n${conversationState.transcript.slice(-3).join('\n\n')}` : '';
 
-            const moderatorPrompt = `Round ${round + 1} of ${config.NUM_ROUNDS}. Current flashcard set:${flashcardSummary}${recentTranscript}\n\nAvailable experts: ${availableExperts.join(', ')}\n\nSelect one expert to start this round. Encourage them to collaborate with others by passing to additional experts (up to ${config.MAX_EXPERT_PASSES} passes per round). Consider which perspective would add the most value and could spark good collaboration.`;
-            
+            const contributionSummary = Object.entries(conversationState.expertContributions)
+              .map(([expert, count]) => `${expert}: ${count}`)
+              .join(', ');
+
+            const moderatorPrompt = `Round ${round + 1} of ${config.NUM_ROUNDS}. Current flashcard set:${flashcardSummary}${recentTranscript}\n\nExpert contributions so far: ${contributionSummary}\n\nAvailable experts: ${availableExperts.join(', ')}\n\nSelect one expert to start this round. Encourage them to collaborate with others by passing to additional experts (up to ${config.MAX_EXPERT_PASSES} passes per round). Consider which perspective would add the most value and could spark good collaboration.`;
+
             const moderatorSelection = await streamResponse([
               ...agentThreads.moderator,
               { role: 'user', content: moderatorPrompt }
             ], `moderator-${round}`, 'moderator', getAgentDisplayName('moderator'), baseProgress + 2);
-            
+
             agentThreads.moderator.push({ role: 'assistant', content: moderatorSelection });
             conversationState.transcript.push(`Moderator: ${moderatorSelection}`);
-            
+
             // Extract selected expert from moderator response
             let selectedExpert = availableExperts[0]; // fallback
             for (const expert of availableExperts) {
@@ -543,30 +665,30 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
                 break;
               }
             }
-            
+
             conversationState.activeAgent = selectedExpert;
-            
+
             // Expert panel round with pass chains
             let currentAgent = selectedExpert;
             let passChainCount = 0;
-            
+
             while (passChainCount < config.MAX_EXPERT_PASSES) {
               const agentDisplayName = getAgentDisplayName(currentAgent);
               sendUpdate({ type: 'status', message: `${agentDisplayName} is contributing...`, progress: baseProgress + 5 + passChainCount * 2 });
-              
+
               const passesRemaining = config.MAX_EXPERT_PASSES - passChainCount;
               const availableForHandoff = config.INCLUDE_PERSONAS.filter((p: string) => p !== currentAgent);
-              
+
               const agentPrompt = `You are now participating in round ${round + 1}. Current flashcard set:${flashcardSummary}${recentTranscript}\n\nContribute your expertise to improve the flashcard set.\n\nIMPORTANT: After you finish updating cards, you have ${passesRemaining} expert passes remaining this round. Consider passing to another expert who could build on your work:\n\nAvailable experts: ${availableForHandoff.join(', ')}\n\nTo pass, simply mention their name in your response (like "@challenger, want to stress-test these?" or "Hey coach, can you add study strategies?"). Otherwise, your contribution will end the round.`;
-              
+
               const agentResponse = await streamResponse([
                 ...agentThreads[currentAgent],
                 { role: 'user', content: agentPrompt }
               ], `${currentAgent}-${round}-${passChainCount}`, currentAgent as FlashcardMessage['role'], agentDisplayName, baseProgress + 5 + passChainCount * 2);
-              
+
               agentThreads[currentAgent].push({ role: 'assistant', content: agentResponse });
               conversationState.transcript.push(`${agentDisplayName}: ${agentResponse}`);
-              
+
               // Extract and apply operations
               const agentJSON = extractJSON(agentResponse);
               console.log(`📊 ${currentAgent} JSON extraction result:`, agentJSON);
@@ -575,7 +697,7 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
                 const result = applyFlashcardOperations(currentFlashcards, agentJSON.operations);
                 currentFlashcards = result.flashcards;
                 console.log(`📈 Total flashcards after ${currentAgent}: ${currentFlashcards.length}`);
-                
+
                 sendUpdate({
                   type: 'flashcards_updated',
                   flashcards: currentFlashcards,
@@ -585,18 +707,23 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
               } else {
                 console.log(`❌ No valid operations found from ${currentAgent}`);
                 // If no JSON found, send a follow-up reminder
-                if (!agentResponse.includes('```json') && !agentResponse.includes('operations')) {
+                console.log('🔍 Checking agent response for JSON/operations keywords...');
+                console.log('Has ```json:', agentResponse.includes('```json'));
+                console.log('Has operations:', agentResponse.includes('operations'));
+                console.log('Has {:', agentResponse.includes('{'));
+
+                if (!agentResponse.includes('operations') && !agentResponse.includes('{')) {
                   console.log(`🔔 Sending JSON reminder to ${currentAgent}`);
                   const reminderResponse = await streamResponse([
                     ...agentThreads[currentAgent],
-                    { 
-                      role: 'user', 
+                    {
+                      role: 'user',
                       content: 'I notice you didn\'t include the required JSON code block with your flashcard operations. Please add your flashcard changes now using the JSON format, or I won\'t be able to update the flashcard set!'
                     }
                   ], `${currentAgent}-reminder-${round}-${passChainCount}`, currentAgent as FlashcardMessage['role'], getAgentDisplayName(currentAgent), baseProgress + 8 + passChainCount * 2);
-                  
+
                   agentThreads[currentAgent].push({ role: 'assistant', content: reminderResponse });
-                  
+
                   // Try to extract JSON from the reminder response
                   const reminderJSON = extractJSON(reminderResponse);
                   if (reminderJSON?.operations && reminderJSON.operations.length > 0) {
@@ -604,7 +731,7 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
                     const result = applyFlashcardOperations(currentFlashcards, reminderJSON.operations);
                     currentFlashcards = result.flashcards;
                     console.log(`📈 Total flashcards after ${currentAgent} reminder: ${currentFlashcards.length}`);
-                    
+
                     sendUpdate({
                       type: 'flashcards_updated',
                       flashcards: currentFlashcards,
@@ -614,14 +741,14 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
                   }
                 }
               }
-              
+
               // Check for handoffs
               const { nextAgent, shouldReturnToModerator } = processAgentResponse(agentResponse);
-              
+
               if (shouldReturnToModerator || !nextAgent) {
                 break;
               }
-              
+
               if (nextAgent && config.INCLUDE_PERSONAS.includes(nextAgent)) {
                 currentAgent = nextAgent;
                 passChainCount++;
@@ -630,24 +757,24 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
                 break;
               }
             }
-            
+
             conversationState.lastAgent = selectedExpert;
           }
 
           // Final moderator wrap-up
           sendUpdate({ type: 'status', message: 'Moderator is concluding the session...', progress: 95 });
-          
+
           const finalSummary = await streamResponse([
             ...agentThreads.moderator,
-            { 
-              role: 'user', 
+            {
+              role: 'user',
               content: `All ${config.NUM_ROUNDS} rounds are complete. We now have ${currentFlashcards.length} flashcards on "${topic}". Please provide a brief conclusion to wrap up our expert panel session.`
             }
           ], 'moderator-final', 'moderator', getAgentDisplayName('moderator'), 97);
-          
+
           agentThreads.moderator.push({ role: 'assistant', content: finalSummary });
           conversationState.transcript.push(`Moderator: ${finalSummary}`);
-          
+
           sendUpdate({ type: 'status', message: 'Finalizing flashcard set...', progress: 99 });
 
           // Send final results
@@ -662,8 +789,8 @@ CRITICAL: You MUST end every response with a JSON code block containing your fla
           });
 
         } catch (error) {
-          sendUpdate({ 
-            type: 'error', 
+          sendUpdate({
+            type: 'error',
             error: error instanceof Error ? error.message : 'Unknown error',
             progress: 0
           });

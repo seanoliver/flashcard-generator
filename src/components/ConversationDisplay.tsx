@@ -10,12 +10,24 @@ interface FlashcardMessage {
   speaker: string;
 }
 
+interface RoundProgress {
+  currentRound: number;
+  totalRounds: number;
+  passesRemaining: number;
+}
+
+interface ExpertContribution {
+  [expertName: string]: number;
+}
+
 interface ConversationDisplayProps {
   conversation: FlashcardMessage[];
   activeStreams?: Map<string, FlashcardMessage>;
+  roundProgress?: RoundProgress | null;
+  expertContributions?: ExpertContribution;
 }
 
-export default function ConversationDisplay({ conversation, activeStreams }: ConversationDisplayProps) {
+export default function ConversationDisplay({ conversation, activeStreams, roundProgress, expertContributions }: ConversationDisplayProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isStreamingRef = useRef(false);
 
@@ -24,7 +36,7 @@ export default function ConversationDisplay({ conversation, activeStreams }: Con
     if (scrollRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-      
+
       // Auto-scroll if user is near bottom or if actively streaming
       if (isNearBottom || isStreamingRef.current || (activeStreams && activeStreams.size > 0)) {
         scrollRef.current.scrollTop = scrollHeight;
@@ -38,6 +50,44 @@ export default function ConversationDisplay({ conversation, activeStreams }: Con
   }, [activeStreams]);
   return (
     <div className="h-full flex flex-col">
+      {/* Round Progress and Expert Contributions Status */}
+      {(roundProgress || (expertContributions && Object.keys(expertContributions).length > 0)) && (
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            {/* Round Progress */}
+            {roundProgress && (
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-gray-700 dark:text-gray-300">
+                  Round {roundProgress.currentRound} of {roundProgress.totalRounds}
+                </span>
+                <span className="text-gray-500 dark:text-gray-400">•</span>
+                <span className="text-gray-600 dark:text-gray-400">
+                  {roundProgress.passesRemaining} passes remaining
+                </span>
+              </div>
+            )}
+
+            {/* Expert Contributions */}
+            {expertContributions && Object.keys(expertContributions).length > 0 && (
+              <div className="flex items-center gap-2">
+                {roundProgress && <span className="text-gray-500 dark:text-gray-400">•</span>}
+                <span className="font-medium text-gray-700 dark:text-gray-300">Expert contributions:</span>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(expertContributions).map(([expert, count]) => (
+                    <span
+                      key={expert}
+                      className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs"
+                    >
+                      {expert}: {count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4">
         {conversation.map((message, index) => {
           const isStreaming = activeStreams && Array.from(activeStreams.values()).some(
@@ -106,7 +156,7 @@ export default function ConversationDisplay({ conversation, activeStreams }: Con
           };
 
           const styling = getMessageStyling(message.role);
-          
+
           return (
             <div
               key={`${message.role}-${message.timestamp}-${index}`}
@@ -154,7 +204,7 @@ export default function ConversationDisplay({ conversation, activeStreams }: Con
             </div>
           );
         })}
-        
+
         {conversation.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <p className="text-gray-500 dark:text-gray-400 text-center">
